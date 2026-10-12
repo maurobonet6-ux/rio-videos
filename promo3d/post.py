@@ -22,7 +22,7 @@ def suave(x): x = max(0, min(1, x)); return 1 - (1 - x) ** 3
 # ---------- subtítulos: trozos de hasta 3 palabras; cada palabra aparece cuando se dice ----------
 def trozos():
     out = []
-    for vid, _, f0 in G.VOZ:
+    for i_, (vid, _, f0) in enumerate(G.VOZ):
         if vid not in G.SUBTITULOS: continue
         dichas = json.load(open(os.path.join(AQUI, 'voz', vid + '.json')))['palabras']
         escritas = G.SUBTITULOS[vid].split()
@@ -30,6 +30,7 @@ def trozos():
         else:                                            # si no cuadran, se reparten a lo largo de la frase
             dur = dichas[-1][2]; tiempos = [f0 + i * dur / len(escritas) * G.FPS for i in range(len(escritas))]
         fin = f0 + dichas[-1][2] * G.FPS + 6
+        if i_ + 1 < len(G.VOZ): fin = min(fin, G.VOZ[i_ + 1][2] - 1)   # no pisa la frase siguiente
         grupo = []
         for w, t in zip(escritas, tiempos):
             if grupo and (len(grupo) == 3 or sum(len(x) for x, _ in grupo) + len(w) > 17): out.append(grupo); grupo = []
