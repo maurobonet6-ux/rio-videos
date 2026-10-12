@@ -1,0 +1,35 @@
+{
+ "texto": "Empieza gratis. Enlace en el perfil.",
+ "palabras": [
+  [
+   "Empieza",
+   0.0,
+   0.4
+  ],
+  [
+   "gratis.",
+   0.48,
+   1.2
+  ],
+  [
+   "Enlace",
+   1.28,
+   1.6
+  ],
+  [
+   "en",
+   1.64,
+   1.68
+  ],
+  [
+   "el",
+   1.72,
+   1.76
+  ],
+  [
+   "perfil.",
+   1.84,
+   2.48
+  ]
+ ]
+}

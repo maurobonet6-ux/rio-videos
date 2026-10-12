@@ -64,6 +64,24 @@ EFECTOS = [('fichas', 1), ('cartas', 8), ('cartas', 42), ('pop', 70), ('whoosh',
            ('fichas', 420), ('cartas', 440), ('whoosh', 482), ('pop', 508), ('whoosh', 578), ('golpe', 590), ('pop', 622)]
 
 
+
+# ---------- Versión para TikTok (VARIANTE=tiktok) ----------
+# TikTok quitó vídeos de RÍO por «bienes y servicios regulados» (lo ve como juego): esta versión no lleva mesa, cartas ni fichas,
+# lleva el aviso «EDUCACIÓN», la escena 5 enseña Aprender en vez de la partida y el final no nombra la web.
+import os as _os
+TIKTOK = _os.environ.get('VARIANTE', '') == 'tiktok'
+if TIKTOK:
+    _cambia = {'v1': ('v1t', '¿Sabrías calcular tus probabilidades en cada mano?'),
+               'v5': ('v5t', 'Aprende con guías, tablas y lecciones cortas.'),
+               'v7': ('v7t', 'Empieza gratis. Enlace en el perfil.')}
+    VOZ = [(_cambia[v][0], _cambia[v][1], f) if v in _cambia else (v, t, f) for v, t, f in VOZ]
+    VOZ = [(v, t, 390 if v == 'v5t' else f) for v, t, f in VOZ]         # «Aprende…» es más larga: empieza antes
+    SUBTITULOS = {_cambia.get(k, (k,))[0]: (_cambia[k][1] if k in _cambia else t) for k, t in SUBTITULOS.items()}
+    SUBTITULOS.pop('v7t', None)
+    ROJAS = ROJAS | {'calcular', 'probabilidades', 'guías,', 'lecciones'}
+    ENCIENDE = 10                                     # el móvil se enciende casi al empezar
+    EFECTOS = [(n, f) for n, f in EFECTOS if n not in ('fichas', 'cartas') and (n, f) != ('pop', 70)] + [('pop', 10)]
+
 def escena(f):
     for n, a, b in ESCENAS:
         if a <= f <= b: return n

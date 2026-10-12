@@ -11,6 +11,10 @@ on:
         description: 'Fotogramas (p. ej. 1-144); vacío = todo el vídeo'
         required: false
         type: string
+      variante:
+        description: 'Versión: vacío (Instagram/YouTube) o tiktok (sin mesa, cartas ni fichas)'
+        required: false
+        type: string
       ancho:
         description: 'Ancho del render 3D (1080 final; 720 prueba)'
         default: '1080'
@@ -27,6 +31,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[render')
     runs-on: ubuntu-latest
     outputs:
+      variante: ${{ steps.rango.outputs.variante }}
       rango: ${{ steps.rango.outputs.rango }}
       completo: ${{ steps.rango.outputs.completo }}
     steps:
@@ -38,16 +43,19 @@ jobs:
         run: |
           TOTAL=$(python3 -c "import sys; sys.path.insert(0,'promo3d'); import guion; print(guion.TOTAL)")
           R="$ENTRADA"
-          [ -n "$R" ] || R=$(echo "$MENSAJE" | grep -oE '\[render [0-9]+-[0-9]+\]' | grep -oE '[0-9]+-[0-9]+' || true)
+          [ -n "$R" ] || R=$(echo "$MENSAJE" | grep -oE '\[render[^]]* [0-9]+-[0-9]+' | grep -oE '[0-9]+-[0-9]+' || true)
           [ -n "$R" ] || R="1-$TOTAL"
           echo "rango=$R" >> $GITHUB_OUTPUT
           [ "$R" = "1-$TOTAL" ] && echo "completo=1" >> $GITHUB_OUTPUT || echo "completo=0" >> $GITHUB_OUTPUT
-          echo "fotogramas $R"
+          V="${{ inputs.variante }}"; echo "$MENSAJE" | grep -qi '\[render[^]]*tiktok' && V=tiktok
+          echo "variante=$V" >> $GITHUB_OUTPUT
+          echo "fotogramas $R · variante ${V:-normal}"
 
   # Un tramo de fotogramas por máquina: pantalla del móvil → escena 3D → textos → trozo de vídeo
   render:
     needs: preparar
     runs-on: ubuntu-latest
+    env: { VARIANTE: '${{ needs.preparar.outputs.variante }}' }
     timeout-minutes: 300
     strategy:
       fail-fast: true
@@ -94,6 +102,7 @@ jobs:
     needs: [preparar, render]
     if: needs.preparar.outputs.completo == '1'
     runs-on: ubuntu-latest
+    env: { VARIANTE: '${{ needs.preparar.outputs.variante }}' }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -107,4 +116,4 @@ jobs:
             -c:v libx264 -crf 20 -preset slow -maxrate 9M -bufsize 18M -pix_fmt yuv420p -profile:v high -r 30 \
             -c:a aac -b:a 192k -af loudnorm=I=-14:TP=-1.5:LRA=11 -shortest -movflags +faststart rio-promo3d.mp4
       - uses: actions/upload-artifact@v4
-        with: { name: rio-promo3d, path: rio-promo3d.mp4, retention-days: 30 }
+        with: { name: 'rio-promo3d-${{ env.VARIANTE || ''normal'' }}', path: rio-promo3d.mp4, retention-days: 30 }

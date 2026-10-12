@@ -1,0 +1,40 @@
+{
+ "texto": "¿Sabrías calcular tus probabilidades en cada mano?",
+ "palabras": [
+  [
+   "¿Sabrías",
+   0.0,
+   0.48
+  ],
+  [
+   "calcular",
+   0.56,
+   0.96
+  ],
+  [
+   "tus",
+   1.04,
+   1.2
+  ],
+  [
+   "probabilidades",
+   1.28,
+   2.08
+  ],
+  [
+   "en",
+   2.16,
+   2.24
+  ],
+  [
+   "cada",
+   2.32,
+   2.48
+  ],
+  [
+   "mano?",
+   2.56,
+   3.12
+  ]
+ ]
+}

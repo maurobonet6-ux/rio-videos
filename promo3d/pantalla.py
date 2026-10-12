@@ -8,7 +8,7 @@ import guion as G
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
 CAP = os.path.join(AQUI, '..', 'salida', 'promo3d')
-OUT = os.path.join(CAP, 'pantalla')
+OUT = os.path.join(CAP, 'pantalla' + ('_tiktok' if G.TIKTOK else ''))
 SW, SH = 1200, 2580               # 400x860 @3x
 BARRA = 132                       # barra de estado (44 pt)
 VISTA = SH - BARRA                # alto visible de cada captura
@@ -16,11 +16,11 @@ SALIDA_ANCHO = 900                # tamaño de la textura que usa Blender
 FONDO = (10, 10, 10)
 FUENTE = '/usr/share/fonts/opentype/inter/InterDisplay-SemiBold.otf'
 NAV = {'inicio': 'analizar', 'mano1': 'analizar', 'mano': 'analizar', 'analisis': 'analizar',
-       'carrera_a': 'carrera', 'carrera_b': 'carrera', 'progreso': 'progreso'}
+       'carrera_a': 'carrera', 'carrera_b': 'carrera', 'aprender': 'aprender', 'progreso': 'progreso'}
 INFO = json.load(open(os.path.join(CAP, 'capturas.json')))
 
 # Tarjetas que se despegan: captura, caja en la captura (x, y, an, al) y desde cuándo falta en la pantalla
-SCROLL_MAX = {'analisis': INFO['analisis']['alto'] - VISTA, 'carrera': 1650, 'progreso': 1000}
+SCROLL_MAX = {'analisis': INFO['analisis']['alto'] - VISTA, 'carrera': 1650, 'progreso': 1000, 'aprender': 900}
 TARJETAS = {
     'ganas':     ('analisis', INFO['analisis']['tarjeta'], G.DESPEGA_GANAS[0]),
     'correctas': ('progreso', INFO['progreso']['tarjeta'], G.DESPEGA_CORRECTAS[0]),
@@ -103,10 +103,11 @@ def fotograma(f):
     s_c = scroll_de('carrera', f, G.SCROLL_CARRERA)
     carrera = capa('carrera_a', s_c) if f < G.MARCA_ETAPA else Image.blend(capa('carrera_a', s_c), capa('carrera_b', s_c), min(1, (f - G.MARCA_ETAPA) / 4))
     if f < G.DESLIZA_PARTIDA[0]: return carrera
-    if f <= G.DESLIZA_PARTIDA[1]: return desliza(carrera, capa('partida'), G.DESLIZA_PARTIDA)
-    if f < G.DESLIZA_PROGRESO[0]: return capa('partida')
+    quinta = capa('aprender', SCROLL_MAX['aprender'] * G.tramo(f, (410, 470))) if G.TIKTOK else capa('partida')
+    if f <= G.DESLIZA_PARTIDA[1]: return desliza(carrera, quinta, G.DESLIZA_PARTIDA)
+    if f < G.DESLIZA_PROGRESO[0]: return quinta
     prog = capa('progreso', scroll_de('progreso', f, G.SCROLL_PROGRESO), sin)
-    if f <= G.DESLIZA_PROGRESO[1]: return desliza(capa('partida'), prog, G.DESLIZA_PROGRESO)
+    if f <= G.DESLIZA_PROGRESO[1]: return desliza(capa('aprender', SCROLL_MAX['aprender']) if G.TIKTOK else capa('partida'), prog, G.DESLIZA_PROGRESO)
     if f < G.DESLIZA_FINAL[0]: return prog
     if f <= G.DESLIZA_FINAL[1]: return desliza(prog, capa('inicio'), G.DESLIZA_FINAL)
     return capa('inicio')

@@ -1,0 +1,40 @@
+{
+ "texto": "Aprende con guías, tablas y lecciones cortas.",
+ "palabras": [
+  [
+   "Aprende",
+   0.0,
+   0.4
+  ],
+  [
+   "con",
+   0.48,
+   0.64
+  ],
+  [
+   "guías,",
+   0.72,
+   1.36
+  ],
+  [
+   "tablas",
+   1.48,
+   1.84
+  ],
+  [
+   "y",
+   2.0,
+   2.04
+  ],
+  [
+   "lecciones",
+   2.08,
+   2.56
+  ],
+  [
+   "cortas.",
+   2.64,
+   3.36
+  ]
+ ]
+}

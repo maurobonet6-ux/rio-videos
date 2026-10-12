@@ -136,6 +136,9 @@ L.new(mezcla.outputs[0], rampa.inputs['Fac']); L.new(rampa.outputs['Color'], Pb.
 bump = N.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = 0.35; bump.inputs['Distance'].default_value = 0.02
 L.new(grano.outputs['Fac'], bump.inputs['Height']); L.new(bump.outputs['Normal'], Pb.inputs['Normal'])
 Pb.inputs['Sheen Weight'].default_value = 0.25; Pb.inputs['Sheen Tint'].default_value = (0.6, 0.12, 0.15, 1)
+if G.TIKTOK:                      # TikTok: sin mesa de póker; una superficie de estudio gris muy oscura, algo satinada
+    rampa.color_ramp.elements[0].color = (0.006, 0.006, 0.007, 1); rampa.color_ramp.elements[1].color = (0.016, 0.016, 0.018, 1)
+    Pb.inputs['Sheen Weight'].default_value = 0.0; Pb.inputs['Roughness'].default_value = 0.38; bump.inputs['Strength'].default_value = 0.05
 mesa.data.materials.append(mf)
 
 # ---------- fichas (sin valores) ----------
@@ -441,6 +444,12 @@ GANCHO = [(f, _t(c1 + Vector(d), 0.006), tuple(c1 + Vector((0.2, 0.18, 0.2))), 0
           ((1, (0.55, -2.15, 0.36)), (14, (0.52, -2.05, 0.34)), (28, (0.5, -1.98, 0.33)), (36, (0.5, -1.96, 0.33)))]
 GANCHO += [(f, _t(c2 + Vector(d), 0.006), tuple(c2 + Vector((0.2, 0.18, 0.2))), 0) for f, d in ((50, (0.45, -2.0, 0.33)), (60, (0.42, -1.94, 0.32)), (68, (0.41, -1.9, 0.32)))]
 GANCHO += [(82, (0.12, -1.9, 0.8), (0.0, -0.35, 0.06), 0)]
+if G.TIKTOK:                      # TikTok: sin cartas; primer plano del móvil en la mesa, que se enciende con el análisis
+    def _pp(f, u, v): return tuple(mundo(f, punto_pantalla(u, v, 0)))
+    gu, gv = uv_caja(*P.caja_pantalla('ganas'))
+    GANCHO = [(1, _t(Vector((0.62, -1.45, 0.2)), 0.006), (0.05, -0.2, 0.04), 0), (20, _t(Vector((0.5, -1.25, 0.26)), 0.006), (0.04, -0.15, 0.05), 0),
+              (44, _t(Vector((0.22, -0.95, 0.42)), 0.006), _pp(44, gu, gv), 0), (62, _t(Vector((0.18, -0.85, 0.46)), 0.006), _pp(62, gu, gv), 0),
+              (82, (0.12, -1.9, 0.8), (0.0, -0.35, 0.06), 0)]
 # Teleobjetivo en el gancho (85 mm: menos deformación, como un plano de cine); a partir del 92, el de siempre
 for fr, ln in ((1, 85), (70, 85), (92, 50)): cd.lens = ln; cd.keyframe_insert('lens', frame=fr)
 # Luz de relleno suave y baja: ilumina la cara de la carta cuando se levanta
@@ -450,6 +459,9 @@ for fr, base in ((1, c1), (36, c1), (48, c2), (72, c2)):
     relleno.location = base + Vector((0.15, -0.75, 0.13)); relleno.keyframe_insert('location', frame=fr)
     relleno.rotation_euler = ((base + Vector((0.2, 0.2, 0.08))) - relleno.location).to_track_quat('-Z', 'Y').to_euler(); relleno.keyframe_insert('rotation_euler', frame=fr)
 for fr, e in ((1, 2.5), (72, 2.5), (84, 0)): drel.energy = e; drel.keyframe_insert('energy', frame=fr)
+if G.TIKTOK:
+    for fr in (1, 72, 84): drel.energy = 0; drel.keyframe_insert('energy', frame=fr)
+    lampara.location = (0.0, -0.35, 3.0)
 CAM = [
     *GANCHO, frente(g0, 2.6, sube=S), frente(g1, 2.9, lado=-0.3, sube=S),
     frente(132, 2.9, lado=-1.2, alto=-0.5, sube=0.2, rodar=-4), frente(170, 2.7, lado=-0.5, alto=-0.2, sube=0.25),
@@ -491,6 +503,9 @@ r.use_motion_blur = True; r.motion_blur_shutter = 0.5
 r.resolution_x = args.ancho; r.resolution_y = round(args.ancho * 16 / 9); r.resolution_percentage = 100
 r.image_settings.file_format = 'PNG'
 sc.view_settings.view_transform = 'Standard'; sc.view_settings.look = 'None'
+
+if G.TIKTOK:                      # TikTok: fuera cartas y fichas (lo marca como juego); el resto de la escena, igual
+    for o in [o for o in bpy.data.objects if o.name.startswith(('carta_', 'ficha'))]: bpy.data.objects.remove(o, do_unlink=True)
 
 tiempos = {}
 LISTA = [int(x) for x in args.lista.split(',')] if args.lista else range(args.desde, args.hasta + 1, args.cada)

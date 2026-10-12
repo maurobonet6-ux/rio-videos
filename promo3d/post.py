@@ -110,6 +110,14 @@ def pastilla(lienzo, t, cy, tam, f, ini):
     m = Image.new('L', (W, H)); ImageDraw.Draw(m).text((x0 + px - bb[0], y0 + py - bb[1]), t, font=fnt, fill=int(255 * k))
     lienzo.paste(BLANCO, (0, 0), m)
 
+def aviso(lienzo):
+    """TikTok: aviso fijo «EDUCACIÓN · sin dinero real» arriba a la izquierda."""
+    fnt = ImageFont.truetype(BOLD, int(W * 0.03)); d = ImageDraw.Draw(lienzo); t = 'EDUCACIÓN · sin dinero real'
+    bb = d.textbbox((0, 0), t, font=fnt); px, py = W * 0.022, W * 0.012; x0, y0 = W * 0.04, H * 0.035
+    caja = Image.new('L', (W, H)); ImageDraw.Draw(caja).rounded_rectangle((x0, y0, x0 + bb[2] - bb[0] + 2 * px, y0 + bb[3] - bb[1] + 2 * py), radius=W * 0.02, fill=150)
+    lienzo.paste((12, 12, 14), (0, 0), caja)
+    d.text((x0 + px - bb[0], y0 + py - bb[1]), t, font=fnt, fill=(235, 235, 240))
+
 def vineta():
     v = Image.radial_gradient('L').resize((W, H))
     return v.point(lambda p: int(255 - 120 * (p / 255) ** 2))
@@ -127,7 +135,8 @@ for f in range(args.desde, args.hasta + 1):
     subtitulo(im, f)
     texto(im, 'RÍO', 0.15, 0.27, f, G.LOGO, acento=ROJO, entra=16, desenfoque=0.06)
     texto(im, 'Empieza gratis', 0.255, 0.095, f, G.ESLOGAN, sube=0.02)
-    pastilla(im, 'riopoker.es', 0.335, 0.07, f, G.WEB)
+    pastilla(im, 'enlace en el perfil' if G.TIKTOK else 'riopoker.es', 0.335, 0.062 if G.TIKTOK else 0.07, f, G.WEB)
+    if G.TIKTOK: aviso(im)
     g = ruido[f % len(ruido)]
     im = Image.blend(im, ImageChops.overlay(im, Image.merge('RGB', [g] * 3)), 0.05)
     im.save(os.path.join(args.out, f'p{f:04d}.png'))
