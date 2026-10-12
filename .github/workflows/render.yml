@@ -16,8 +16,12 @@ on:
         required: false
         type: string
       ancho:
-        description: 'Ancho del render 3D (1080 final; 720 prueba)'
+        description: 'Ancho del render 3D (1080 final; 360 prueba)'
         default: '1080'
+        type: string
+      muestras:
+        description: 'Muestras de Cycles (192 final, ~2,5 h por máquina en el anuncio; 16 prueba)'
+        default: '192'
         type: string
   push:
     branches: [main]
@@ -34,6 +38,8 @@ jobs:
       variante: ${{ steps.rango.outputs.variante }}
       rango: ${{ steps.rango.outputs.rango }}
       completo: ${{ steps.rango.outputs.completo }}
+      ancho: ${{ steps.rango.outputs.ancho }}
+      muestras: ${{ steps.rango.outputs.muestras }}
     steps:
       - uses: actions/checkout@v4
       - id: rango
@@ -41,22 +47,28 @@ jobs:
           MENSAJE: ${{ github.event.head_commit.message }}
           ENTRADA: ${{ inputs.rango }}
         run: |
-          TOTAL=$(python3 -c "import sys; sys.path.insert(0,'promo3d'); import guion; print(guion.TOTAL)")
+          V0="${{ inputs.variante }}"; echo "$MENSAJE" | grep -qi '\[render[^]]*anuncio' && V0=anuncio
+          TOTAL=$(VARIANTE=$V0 python3 -c "import sys; sys.path.insert(0,'promo3d'); import guion; print(guion.TOTAL)")
           R="$ENTRADA"
           [ -n "$R" ] || R=$(echo "$MENSAJE" | grep -oE '\[render[^]]* [0-9]+-[0-9]+' | grep -oE '[0-9]+-[0-9]+' || true)
           [ -n "$R" ] || R="1-$TOTAL"
           echo "rango=$R" >> $GITHUB_OUTPUT
           [ "$R" = "1-$TOTAL" ] && echo "completo=1" >> $GITHUB_OUTPUT || echo "completo=0" >> $GITHUB_OUTPUT
           V="${{ inputs.variante }}"; echo "$MENSAJE" | grep -qi '\[render[^]]*tiktok' && V=tiktok
+          echo "$MENSAJE" | grep -qi '\[render[^]]*anuncio' && V=anuncio
           echo "variante=$V" >> $GITHUB_OUTPUT
-          echo "fotogramas $R · variante ${V:-normal}"
+          A="${{ inputs.ancho }}"; M="${{ inputs.muestras }}"      # en el mensaje: «ancho=360», «muestras=16»
+          A2=$(echo "$MENSAJE" | grep -oE 'ancho=[0-9]+' | cut -d= -f2 || true); [ -n "$A2" ] && A=$A2
+          M2=$(echo "$MENSAJE" | grep -oE 'muestras=[0-9]+' | cut -d= -f2 || true); [ -n "$M2" ] && M=$M2
+          echo "ancho=${A:-1080}" >> $GITHUB_OUTPUT; echo "muestras=${M:-192}" >> $GITHUB_OUTPUT
+          echo "fotogramas $R · variante ${V:-normal} · ancho ${A:-1080} · muestras ${M:-192}"
 
   # Un tramo de fotogramas por máquina: pantalla del móvil → escena 3D → textos → trozo de vídeo
   render:
     needs: preparar
     runs-on: ubuntu-latest
     env: { VARIANTE: '${{ needs.preparar.outputs.variante }}' }
-    timeout-minutes: 300
+    timeout-minutes: 340
     strategy:
       fail-fast: true
       matrix:
@@ -85,7 +97,7 @@ jobs:
           D=${{ steps.tramo.outputs.desde }}; H=${{ steps.tramo.outputs.hasta }}
           python promo3d/texturas.py
           python promo3d/pantalla.py --desde $D --hasta $H
-          python promo3d/escena.py --salida salida/promo3d/render --ancho ${{ inputs.ancho || '1080' }} --muestras 8 --desde $D --hasta $H | grep '^fotograma'
+          python promo3d/escena.py --salida salida/promo3d/render --ancho ${{ needs.preparar.outputs.ancho }} --muestras ${{ needs.preparar.outputs.muestras }} --desde $D --hasta $H | grep '^fotograma'
           python promo3d/post.py salida/promo3d/render salida/promo3d/post --ancho 1080 --desde $D --hasta $H
           mkdir -p trozos
           ffmpeg -y -v error -framerate 30 -start_number $D -i salida/promo3d/post/p%04d.png \
@@ -113,7 +125,7 @@ jobs:
           python promo3d/audio.py
           for t in $(ls trozos/t*.mp4 | sort); do echo "file '$PWD/$t'"; done > lista.txt
           ffmpeg -y -v error -f concat -safe 0 -i lista.txt -i salida/promo3d/audio.wav -map 0:v -map 1:a \
-            -c:v libx264 -crf 20 -preset slow -maxrate 9M -bufsize 18M -pix_fmt yuv420p -profile:v high -r 30 \
+            -c:v libx264 -crf 17 -preset slow -maxrate 14M -bufsize 28M -pix_fmt yuv420p -profile:v high -r 30 \
             -c:a aac -b:a 192k -af loudnorm=I=-14:TP=-1.5:LRA=11 -shortest -movflags +faststart rio-promo3d.mp4
       - uses: actions/upload-artifact@v4
         with: { name: 'rio-promo3d-${{ env.VARIANTE || ''normal'' }}', path: rio-promo3d.mp4, retention-days: 30 }

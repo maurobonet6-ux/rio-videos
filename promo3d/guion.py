@@ -2,6 +2,7 @@
 # los subtítulos y el logo (post.py) y el sonido (audio.py). Fotogramas a 30 fps, empezando en 1.
 FPS = 30
 TOTAL = 720                       # 24 s
+ESCENA_TOTAL = TOTAL              # la escena 3D siempre dura esto (el anuncio usa trozos de ella, ver más abajo)
 
 # (nombre, primer fotograma, último fotograma)
 ESCENAS = [
@@ -82,6 +83,44 @@ if TIKTOK:
     ROJAS = ROJAS | {'calcular', 'probabilidades', 'guías,', 'lecciones'}
     ENCIENDE = 10                                     # el móvil se enciende casi al empezar
     EFECTOS = [(n, f) for n, f in EFECTOS if n not in ('fichas', 'cartas', 'interruptor') and (n, f) != ('pop', 70)] + [('pop', 10)]
+
+# ---------- Anuncio de Instagram «¿Jugaste bien tu última mano?» (VARIANTE=anuncio, 16 s) ----------
+# Usa trozos de la misma escena 3D con otra velocidad (cámara lenta en el giro, corte seco a la carrera y al final):
+# MAPA dice, para cada fotograma del anuncio, qué instante de la escena se renderiza (con decimales: escena.py usa subframes).
+# Añade una captura de pantalla de una mano que entra volando y se pega en el móvil (escena.py, CAPTURA_VUELA, en tiempo de escena).
+ANUNCIO = _os.environ.get('VARIANTE', '') == 'anuncio'
+CAPTURA_VUELA = (132, 147)        # (tiempo de escena) la captura sale de delante de la cámara y se pega en la pantalla
+MAPA = [((1, 92), (75, 122)),     # gancho: el móvil se levanta y gira a cámara lenta (0,4×)
+        ((75, 122), (165, 172)),  # foto: la captura se pega (anuncio 120) y llegan las cartas (0,55×)
+        ((165, 172), (300, 300)), # matemáticas: la cámara entra en la pantalla y «Ganas 69 %» se despega
+        ((301, 330), (360, 378)), # corte: la carrera, la etapa se marca (anuncio ~333)
+        ((361, 586), (480, 720))] # corte: final con el logo
+CORTES = [301, 361]               # cortes secos (destello y golpe de zoom en post.py)
+GOLPES = [120, 211, 333]          # golpes de zoom: la captura se pega, «Ganas» se despega, sello de la carrera
+GANCHO = ['¿Jugaste *bien*', 'tu *última* mano?']   # texto grande desde el primer fotograma (rojo entre asteriscos)
+GANCHO_PALABRAS = 5               # palabras de a1 que ya están en el gancho (sin subtítulo)
+ROTULO = (160, 198)
+SUB_Y = {'a3': 0.7}               # subtítulos más abajo mientras «Ganas 69 %» flota arriba (fracción del alto)               # «o por voz · o pega tu historial»
+if ANUNCIO:
+    TOTAL = 480                   # 16 s
+    VOZ = [('a1', '¿Jugaste bien tu última mano? Compruébalo en diez segundos.', 2),
+           ('a2', 'Hazle una foto y Río la lee sola.', 128),
+           ('a3', 'Cuánto ganas, cuánto necesitas y por qué.', 208),
+           ('a4', 'Y avanza nivel a nivel.', 304),
+           ('a5', 'Pruébalo gratis en río poker punto es.', 374)]
+    SUBTITULOS = {'a1': '¿Jugaste bien tu última mano? Compruébalo en diez segundos.', 'a2': 'Hazle una foto y RÍO la lee sola.',
+                  'a3': 'Cuánto ganas, cuánto necesitas y por qué.', 'a4': 'Y avanza nivel a nivel.'}
+    ROJAS = {'diez', 'segundos.', 'foto', 'RÍO', 'sola.', 'ganas,', 'necesitas', 'qué.', 'nivel', 'nivel.'}
+    LOGO, ESLOGAN, WEB = 366, 380, 394
+    EFECTOS = [('whoosh', 4), ('whoosh2', 96), ('pop', 120), ('cartas', 122), ('cartas', 152), ('whoosh2', 190), ('pop', 211),
+               ('cartas', 268), ('whoosh', 301), ('logro', 333), ('whoosh', 361), ('golpe', 366), ('pop', 394)]
+
+def orig(f):
+    """Instante de la escena 3D (con decimales) que se ve en el fotograma f. Sin anuncio, el mismo f."""
+    if not ANUNCIO: return float(f)
+    for (a0, o0), (a1, o1) in MAPA:
+        if a0 <= f <= a1: return o0 + (f - a0) * (o1 - o0) / max(1, a1 - a0)
+    return float(MAPA[-1][1][1])
 
 def escena(f):
     for n, a, b in ESCENAS:

@@ -1,0 +1,50 @@
+{
+ "texto": "¿Jugaste bien tu última mano? Compruébalo en diez segundos.",
+ "palabras": [
+  [
+   "¿Jugaste",
+   0.0,
+   0.48
+  ],
+  [
+   "bien",
+   0.56,
+   0.72
+  ],
+  [
+   "tu",
+   0.8,
+   0.88
+  ],
+  [
+   "última",
+   0.96,
+   1.28
+  ],
+  [
+   "mano?",
+   1.36,
+   1.8
+  ],
+  [
+   "Compruébalo",
+   2.0,
+   2.64
+  ],
+  [
+   "en",
+   2.72,
+   2.8
+  ],
+  [
+   "diez",
+   2.88,
+   3.08
+  ],
+  [
+   "segundos.",
+   3.12,
+   4.08
+  ]
+ ]
+}

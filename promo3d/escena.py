@@ -8,15 +8,21 @@ from mathutils import Matrix, Vector, Quaternion
 AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)
 import guion as G
 import pantalla as P
+import recursos as RC
+HAY_PH = RC.hay()                  # recursos CC0 de Poly Haven (HDRI y texturas reales); sin ellos, todo procedural como antes
+if not HAY_PH: print('AVISO: faltan los recursos de Poly Haven (python3.11 promo3d/recursos.py): se usa la versión procedural', flush=True)
 
 CAP = os.path.join(AQUI, '..', 'salida', 'promo3d')
 TEX = os.path.join(CAP, 'tex')
 ROJO = (0.78, 0.03, 0.06)   # #E5304A en lineal
+EXPOSICION = 0.0             # AgX comprime las luces: se sube un poco la exposición
+HDRI_FUERZA, HDRI_GIRO = 0.12, 0
+BRILLO_PANT = 1.3            # con AgX el blanco 1.0 sale gris: la pantalla brilla algo más para que la app se vea como es
 
 a = argparse.ArgumentParser()
 a.add_argument('--salida', required=True)
 a.add_argument('--ancho', type=int, default=720)
-a.add_argument('--muestras', type=int, default=8)
+a.add_argument('--muestras', type=int, default=128)   # vídeo: 128-256 con OIDN; pruebas rápidas: 16
 a.add_argument('--desde', type=int, default=1)
 a.add_argument('--hasta', type=int, default=G.TOTAL)
 a.add_argument('--cada', type=int, default=1)
@@ -28,7 +34,7 @@ os.makedirs(args.salida, exist_ok=True)
 bpy.ops.wm.read_factory_settings(use_empty=True)
 sc = bpy.context.scene
 sc.render.fps = G.FPS
-sc.frame_start, sc.frame_end = 1, G.TOTAL
+sc.frame_start, sc.frame_end = 1, G.ESCENA_TOTAL
 
 # ---------- utilidades ----------
 def rectangulo_redondeado(nombre, ancho, alto, radio, grosor=0.0, segmentos=10, enlazar=True):
@@ -136,7 +142,29 @@ L.new(mezcla.outputs[0], rampa.inputs['Fac']); L.new(rampa.outputs['Color'], Pb.
 bump = N.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = 0.35; bump.inputs['Distance'].default_value = 0.02
 L.new(grano.outputs['Fac'], bump.inputs['Height']); L.new(bump.outputs['Normal'], Pb.inputs['Normal'])
 Pb.inputs['Sheen Weight'].default_value = 0.25; Pb.inputs['Sheen Tint'].default_value = (0.6, 0.12, 0.15, 1)
-if G.TIKTOK:                      # TikTok: sin mesa de póker; una superficie de estudio gris muy oscura, algo satinada
+
+def tex_ph(N, L, nombre, mapa, escala, coord_out, color=True):
+    """Mapa de una textura de Poly Haven (recursos.py) repetida cada 1/escala unidades."""
+    t = N.new('ShaderNodeTexImage'); t.image = bpy.data.images.load(RC.ruta_tex(nombre, mapa))
+    if not color: t.image.colorspace_settings.name = 'Non-Color'
+    mp = N.new('ShaderNodeMapping'); mp.inputs['Scale'].default_value = (escala, escala, escala)
+    L.new(coord_out, mp.inputs['Vector']); L.new(mp.outputs['Vector'], t.inputs['Vector']); return t
+if HAY_PH:                        # tela de lana real (Poly Haven): su dibujo modula el granate, y su relieve y rugosidad
+    E_TELA = 0.55                 # una repetición cada ~1,8 unidades (~18 cm a escala)
+    dif = tex_ph(N, L, 'caban', 'diff', E_TELA, coord.outputs['Object'])
+    bw = N.new('ShaderNodeRGBToBW'); L.new(dif.outputs['Color'], bw.inputs['Color'])
+    con = N.new('ShaderNodeMapRange'); con.inputs['From Min'].default_value = 0.05; con.inputs['From Max'].default_value = 0.35
+    con.inputs['To Min'].default_value = 0.65; con.inputs['To Max'].default_value = 1.35; L.new(bw.outputs['Val'], con.inputs['Value'])
+    tinte = N.new('ShaderNodeMix'); tinte.data_type = 'RGBA'; tinte.blend_type = 'MULTIPLY'; tinte.inputs['Factor'].default_value = 1.0
+    L.new(rampa.outputs['Color'], tinte.inputs[6]); L.new(con.outputs['Result'], tinte.inputs[7]); L.new(tinte.outputs[2], Pb.inputs['Base Color'])
+    nor = tex_ph(N, L, 'caban', 'nor_gl', E_TELA, coord.outputs['Object'], color=False)
+    nm = N.new('ShaderNodeNormalMap'); nm.inputs['Strength'].default_value = 0.8; L.new(nor.outputs['Color'], nm.inputs['Color'])
+    L.new(nm.outputs['Normal'], bump.inputs['Normal'])                    # el grano fino va encima del relieve de la tela
+    ru = tex_ph(N, L, 'caban', 'rough', E_TELA, coord.outputs['Object'], color=False)
+    rr = N.new('ShaderNodeMapRange'); rr.inputs['To Min'].default_value = 0.82; rr.inputs['To Max'].default_value = 1.0
+    L.new(ru.outputs['Color'], rr.inputs['Value']); L.new(rr.outputs['Result'], Pb.inputs['Roughness'])
+    Pb.inputs['Sheen Weight'].default_value = 0.45; Pb.inputs['Sheen Roughness'].default_value = 0.4
+if G.TIKTOK:                     # TikTok: sin mesa de póker; una superficie de estudio gris muy oscura, algo satinada
     rampa.color_ramp.elements[0].color = (0.006, 0.006, 0.007, 1); rampa.color_ramp.elements[1].color = (0.016, 0.016, 0.018, 1)
     Pb.inputs['Sheen Weight'].default_value = 0.0; Pb.inputs['Roughness'].default_value = 0.38; bump.inputs['Strength'].default_value = 0.05
 mesa.data.materials.append(mf)
@@ -150,7 +178,14 @@ def malla_ficha(color):
     for f in me.polygons: f.use_smooth = True
     def vec(N, L):            # la imagen se proyecta desde arriba: la cara de arriba y, estirada, el canto (rayas)
         c = N.new('ShaderNodeTexCoord'); mp = mapping(N); L.new(c.outputs['Object'], mp.inputs['Vector']); return mp.outputs['Vector']
-    m, _ = material_imagen('Ficha_' + color, os.path.join(TEX, f'ficha_{color}.png'), rugosidad=0.45, coat=0.4, vector=vec)
+    m, _ = material_imagen('Ficha_' + color, os.path.join(TEX, f'ficha_{color}.png'), rugosidad=0.5, coat=0.15, vector=vec)
+    N, L = m.node_tree.nodes, m.node_tree.links; p = N['Principled BSDF']   # arcilla: poro fino y leve desgaste en el canto
+    c = N.new('ShaderNodeTexCoord'); poro = N.new('ShaderNodeTexNoise'); poro.inputs['Scale'].default_value = 260; poro.inputs['Detail'].default_value = 6
+    L.new(c.outputs['Object'], poro.inputs['Vector'])
+    bu = N.new('ShaderNodeBump'); bu.inputs['Strength'].default_value = 0.18; bu.inputs['Distance'].default_value = 0.002
+    L.new(poro.outputs['Fac'], bu.inputs['Height']); L.new(bu.outputs['Normal'], p.inputs['Normal'])
+    ru = N.new('ShaderNodeMapRange'); ru.inputs['To Min'].default_value = 0.42; ru.inputs['To Max'].default_value = 0.62
+    L.new(poro.outputs['Fac'], ru.inputs['Value']); L.new(ru.outputs['Result'], p.inputs['Roughness'])
     me.materials.append(m)
     return me
 def mapping(N):
@@ -190,9 +225,12 @@ def material_carta(c, rayos=False, eje=(0, 0, 1)):
     """Cara, dorso y canto según hacia dónde mira cada cara (normal del objeto). Con rayos=True, el dorso se vuelve
     transparente por donde ya ha pasado el escáner (valor 'scan' animado: y del mundo) y deja ver la carta."""
     m = bpy.data.materials.new('Carta_' + c); m.use_nodes = True; N = m.node_tree.nodes; L = m.node_tree.links
-    p = N['Principled BSDF']; p.inputs['Roughness'].default_value = 0.42; p.inputs['Coat Weight'].default_value = 0.25
-    p.inputs['Coat Roughness'].default_value = 0.25
+    p = N['Principled BSDF']; p.inputs['Roughness'].default_value = 0.34; p.inputs['Coat Weight'].default_value = 0.4   # satinada
+    p.inputs['Coat Roughness'].default_value = 0.14
     tc = N.new('ShaderNodeTexCoord')
+    lino = N.new('ShaderNodeTexNoise'); lino.inputs['Scale'].default_value = 600; L.new(tc.outputs['Object'], lino.inputs['Vector'])  # acabado «lino» del cartón
+    bl = N.new('ShaderNodeBump'); bl.inputs['Strength'].default_value = 0.06; bl.inputs['Distance'].default_value = 0.001
+    L.new(lino.outputs['Fac'], bl.inputs['Height']); L.new(bl.outputs['Normal'], p.inputs['Normal'])
     esp = N.new('ShaderNodeMapping'); esp.inputs['Location'].default_value = (1, 0, 0); esp.inputs['Scale'].default_value = (-1, 1, 1)
     L.new(tc.outputs['UV'], esp.inputs['Vector'])
     def img(nombre, espejo=False):
@@ -275,7 +313,19 @@ cuerpo = rectangulo_redondeado('Cuerpo', 0.78, 1.62, 0.12, grosor=GR, segmentos=
 cuerpo.location = (0, -GR / 2, 0); cuerpo.parent = pivote
 bev = cuerpo.modifiers.new('Bisel', 'BEVEL'); bev.width = 0.022; bev.segments = 5; bev.limit_method = 'ANGLE'; bev.harden_normals = True
 for f in cuerpo.data.polygons: f.use_smooth = True
-cuerpo.data.materials.append(material('Titanio', base=(0.05, 0.05, 0.055), metal=1.0, rugosidad=0.22))
+def titanio():
+    """Titanio con micro-rayado: brillo anisótropo a lo largo del móvil y rugosidad que varía en rayas finas."""
+    m = material('Titanio', base=(0.05, 0.05, 0.055), metal=1.0, rugosidad=0.22); N, L = m.node_tree.nodes, m.node_tree.links
+    p = N['Principled BSDF']; p.inputs['Anisotropic'].default_value = 0.55
+    tg = N.new('ShaderNodeTangent'); tg.direction_type = 'RADIAL'; tg.axis = 'X'   # en la tapa de atrás: a lo largo del móvil
+    L.new(tg.outputs['Tangent'], p.inputs['Tangent'])
+    c = N.new('ShaderNodeTexCoord'); mp = N.new('ShaderNodeMapping'); mp.inputs['Scale'].default_value = (900, 900, 6)   # rayas a lo largo
+    ra = N.new('ShaderNodeTexNoise'); ra.inputs['Detail'].default_value = 2
+    L.new(c.outputs['Object'], mp.inputs['Vector']); L.new(mp.outputs['Vector'], ra.inputs['Vector'])
+    rr = N.new('ShaderNodeMapRange'); rr.inputs['To Min'].default_value = 0.17; rr.inputs['To Max'].default_value = 0.3
+    L.new(ra.outputs['Fac'], rr.inputs['Value']); L.new(rr.outputs['Result'], p.inputs['Roughness'])
+    return m
+cuerpo.data.materials.append(titanio())
 marco = rectangulo_redondeado('Marco', 0.75, 1.59, 0.105)
 marco.location = (0, -GR / 2 - 0.0015, 0); marco.parent = pivote
 marco.data.materials.append(material('Cristal negro', rugosidad=0.04, coat=1.0))
@@ -283,7 +333,8 @@ PW = 0.72; PH = PW * P.SH / P.SW
 pantalla = rectangulo_redondeado('Pantalla', PW, PH, 0.085)
 pantalla.location = (0, -GR / 2 - 0.0025, 0); pantalla.parent = pivote
 m_pant, tex_pant = material_imagen('Pantalla', P.ruta(1) if os.path.exists(P.ruta(1)) else os.path.join(CAP, 'inicio.png'), emision=1.0, rugosidad=0.03)
-m_pant.node_tree.nodes['Principled BSDF'].inputs['Coat Weight'].default_value = 0.12
+m_pant.node_tree.nodes['Principled BSDF'].inputs['Coat Weight'].default_value = 0.2       # cristal: reflejo suave del HDRI
+m_pant.node_tree.nodes['Principled BSDF'].inputs['Emission Strength'].default_value = BRILLO_PANT
 m_pant.node_tree.nodes['Principled BSDF'].inputs['Specular IOR Level'].default_value = 0.2
 m_pant.node_tree.nodes['Principled BSDF'].inputs['Coat Roughness'].default_value = 0.02
 tex_pant.interpolation = 'Linear'
@@ -311,7 +362,7 @@ POSES = [
     (v0, ARRIBA, (INCL, 360, -2)), (v1, ARRIBA, (INCL, 720, 4)), (360, ARRIBA, (INCL, 720, 8)), (382, ARRIBA, (INCL, 720, 4)),
     (404, MESA, (0, 720, -10)), (480, MESA, (0, 720, -10)),
     (500, ARRIBA, (INCL + 4, 720, 8)), (540, ARRIBA, (INCL, 720, 2)), (578, ARRIBA, (INCL, 720, -4)),
-    (606, (0, 0.2, 1.45), (INCL + 6, 720, 0)), (G.TOTAL, (0, 0.2, 1.45), (INCL + 6, 720, 3)),
+    (606, (0, 0.2, 1.45), (INCL + 6, 720, 0)), (G.ESCENA_TOTAL, (0, 0.2, 1.45), (INCL + 6, 720, 3)),
 ]
 animar(movil, [(f, p) for f, p, _ in POSES])
 animar(movil, [(f, r) for f, _, r in POSES], ruta='rotation_euler')
@@ -429,7 +480,17 @@ if not G.TIKTOK:
     for f_ in me.polygons: f_.use_smooth = True
     tulipa = bpy.data.objects.new('Tulipa', me); sc.collection.objects.link(tulipa); tulipa.location = (LX, LY, LZ + 0.17)
     sol = tulipa.modifiers.new('g', 'SOLIDIFY'); sol.thickness = 0.012
-    tulipa.data.materials.append(material('Tulipa', base=(0.012, 0.012, 0.014), metal=0.9, rugosidad=0.3))
+    mt = material('Tulipa', base=(0.012, 0.012, 0.014), metal=0.9, rugosidad=0.3)
+    if HAY_PH:                    # chapa real (Poly Haven): rugosidad y relieve del metal, pintada casi negra
+        N, L = mt.node_tree.nodes, mt.node_tree.links; p_ = N['Principled BSDF']; co = N.new('ShaderNodeTexCoord')
+        ru = tex_ph(N, L, 'metal_plate', 'rough', 1.6, co.outputs['Object'], color=False)
+        rr = N.new('ShaderNodeMapRange'); rr.inputs['To Min'].default_value = 0.22; rr.inputs['To Max'].default_value = 0.5
+        L.new(ru.outputs['Color'], rr.inputs['Value']); L.new(rr.outputs['Result'], p_.inputs['Roughness'])
+        no = tex_ph(N, L, 'metal_plate', 'nor_gl', 1.6, co.outputs['Object'], color=False)
+        nm = N.new('ShaderNodeNormalMap'); nm.inputs['Strength'].default_value = 0.5
+        L.new(no.outputs['Color'], nm.inputs['Color']); L.new(nm.outputs['Normal'], p_.inputs['Normal'])
+        p_.inputs['Metallic'].default_value = 0.7; p_.inputs['Coat Weight'].default_value = 0.3; p_.inputs['Coat Roughness'].default_value = 0.2
+    tulipa.data.materials.append(mt)
     tulipa.data.materials.append(material('Tulipa dentro', base=(0.8, 0.75, 0.68), rugosidad=0.6)); sol.material_offset = 1
     cable = bpy.data.objects.new('Cable', bpy.data.meshes.new('Cable')); sc.collection.objects.link(cable)
     bm = bmesh.new(); bmesh.ops.create_cone(bm, cap_ends=True, segments=12, radius1=0.008, radius2=0.008, depth=6.0); bm.to_mesh(cable.data); bm.free()
@@ -457,6 +518,13 @@ if not G.TIKTOK:
         dlj = bpy.data.lights.new('LejanaLuz', 'SPOT'); dlj.energy = 120; dlj.spot_size = math.radians(70); dlj.color = (1.0, 0.75, 0.5)
         lj = bpy.data.objects.new('LejanaLuz', dlj); sc.collection.objects.link(lj); lj.location = (x, y, z - 0.05)
         fondo.append(lj)
+    # Neblina muy suave en la sala: se ve el cono de luz de la lámpara. Es cara: solo en el gancho
+    bm = bmesh.new(); bmesh.ops.create_cube(bm, size=1.0); niebla = bpy.data.objects.new('Niebla', bpy.data.meshes.new('Niebla'))
+    bm.to_mesh(niebla.data); bm.free(); sc.collection.objects.link(niebla); niebla.location = (0, 4, 3); niebla.scale = (30, 30, 6.2)
+    mn = bpy.data.materials.new('Niebla'); mn.use_nodes = True; nn = mn.node_tree.nodes; nn.remove(nn['Principled BSDF'])
+    vs = nn.new('ShaderNodeVolumeScatter'); vs.inputs['Density'].default_value = 0.006; vs.inputs['Anisotropy'].default_value = 0.35
+    mn.node_tree.links.new(vs.outputs[0], nn['Material Output'].inputs['Volume']); niebla.data.materials.append(mn)
+    niebla.visible_shadow = False; fondo.append(niebla)
     for o in fondo: visible(o, hasta=85)
 barra = luz('Barra', (1.8, -2.6, 5.5), 3, 0.3, mira=(0, 0.2, 1.6)); barra.data.shape = 'RECTANGLE'; barra.data.size_y = 5.0
 
@@ -465,6 +533,7 @@ cd = bpy.data.cameras.new('Cam'); cd.lens = 50; cd.sensor_fit = 'VERTICAL'; cd.s
 cam = bpy.data.objects.new('Cam', cd); sc.collection.objects.link(cam); sc.camera = cam
 cam.rotation_mode = 'QUATERNION'
 cd.dof.use_dof = True; cd.dof.aperture_fstop = 2.8
+cd.dof.aperture_blades = 7; cd.dof.aperture_rotation = math.radians(12)   # bokeh de lente real (heptágono suave)
 for fr, fs in (((1, 2.0), (66, 2.0), (90, 2.8), (104, 2.8)) if G.TIKTOK else ((1, 0.25), (36, 0.4), (66, 2.0), (90, 2.8), (104, 2.8))):   # gancho en macro: poca profundidad de campo, como una lente de cine
     cd.dof.aperture_fstop = fs; cd.dof.keyframe_insert('aperture_fstop', frame=fr)
 foco = vacio('Foco'); cd.dof.focus_object = foco
@@ -527,7 +596,7 @@ CAM = [
     (404, (0.0, -0.1, 3.4), (0.0, -0.1, 0.0), -14), (480, (0.05, -0.1, 3.6), (0.05, -0.1, 0.0), 12),
     frente(500, 3.0, lado=-0.7, alto=-0.4, sube=S), frente(526, 1.7, *uv_caja(*P.caja_pantalla('correctas')), lado=0.2, sube=0.05),
     frente(552, 2.0, 0.5, 0.55, lado=0.1, sube=0.1), frente(578, 3.0, sube=S),
-    frente(606, 3.9, sube=0.72), frente(G.TOTAL, 3.6, sube=0.68),
+    frente(606, 3.9, sube=0.72), frente(G.ESCENA_TOTAL, 3.6, sube=0.68),
 ]
 cam_q = None
 for f, pos, obj, rodar in CAM:
@@ -565,21 +634,63 @@ if not G.TIKTOK:
     cam.parent = grua; foco.parent = grua_foco
 # Atravesar la pantalla: el último tramo hacia dentro va rápido (corte limpio en CORTE_ANALISIS)
 
+# ---------- anuncio: una captura de pantalla de una mano entra volando y se pega en la pantalla ----------
+if G.ANUNCIO:
+    c0, c1 = G.CAPTURA_VUELA
+    img_c = bpy.data.images.load(os.path.join(TEX, 'captura_mano.png'))
+    CW_ = PW * 0.98; CH_ = CW_ * img_c.size[1] / img_c.size[0]
+    captura = rectangulo_redondeado('Captura', CW_, CH_, 0.05, grosor=0.004, segmentos=8)
+    m_c, t_c = material_imagen('Captura', img_c.filepath, emision=BRILLO_PANT, rugosidad=0.2, coat=0.6)
+    N_, L_ = m_c.node_tree.nodes, m_c.node_tree.links                      # esquinas transparentes (alfa de la imagen)
+    tr = N_.new('ShaderNodeBsdfTransparent'); mz = N_.new('ShaderNodeMixShader'); out_ = N_['Material Output']
+    L_.new(t_c.outputs['Alpha'], mz.inputs['Fac']); L_.new(tr.outputs[0], mz.inputs[1])
+    L_.new(N_['Principled BSDF'].outputs[0], mz.inputs[2]); L_.new(mz.outputs[0], out_.inputs['Surface'])
+    captura.data.materials.append(m_c); captura.rotation_mode = 'QUATERNION'
+    def ante_camara(f, ade, der, aba, giro):
+        sc.frame_set(f); M = cam.matrix_world; X, Y, Z = (M.to_3x3() @ Vector(v) for v in ((1, 0, 0), (0, 1, 0), (0, 0, 1)))
+        R = Matrix((X, -Z, Y)).transposed()                               # la cara (−Y de la malla) mira a la cámara
+        R = R @ Matrix.Rotation(math.radians(giro), 3, 'Y') @ Matrix.Rotation(math.radians(-18), 3, 'X')
+        return M.translation - Z * ade + X * der - Y * aba, R.to_quaternion()
+    def en_pantalla(f):
+        sc.frame_set(f); M = pivote.matrix_world @ Matrix.Translation(punto_pantalla(0.5, 0.5, 0.012))
+        return M.translation.copy(), M.to_quaternion()
+    claves = [(c0, *ante_camara(c0, 1.1, 0.55, 0.75, -24), 0.55), (c0 + 7, *ante_camara(c0 + 7, 1.6, 0.18, 0.1, 10), 0.85),
+              (c1, *en_pantalla(c1), 1.0)]
+    q_ant = None
+    for f, pos, q, esc in claves:
+        if q_ant is not None and q_ant.dot(q) < 0: q.negate()             # el camino corto entre giros
+        q_ant = q
+        captura.location = pos; captura.keyframe_insert('location', frame=f)
+        captura.rotation_quaternion = q; captura.keyframe_insert('rotation_quaternion', frame=f)
+        captura.scale = (esc,) * 3; captura.keyframe_insert('scale', frame=f)
+    visible(captura, desde=c0, hasta=c1)
+
 # ---------- render ----------
 w = bpy.data.worlds.new('Mundo'); w.use_nodes = True
 w.node_tree.nodes['Background'].inputs['Color'].default_value = (0.002, 0.002, 0.0025, 1)
+if HAY_PH:                        # HDRI de un bar cálido: luz y reflejos suaves; la cámara sigue viendo el fondo negro
+    WN, WL = w.node_tree.nodes, w.node_tree.links
+    env = WN.new('ShaderNodeTexEnvironment'); env.image = bpy.data.images.load(RC.ruta_hdri())
+    wco = WN.new('ShaderNodeTexCoord'); wmp = WN.new('ShaderNodeMapping'); wmp.inputs['Rotation'].default_value = (0, 0, math.radians(HDRI_GIRO))
+    WL.new(wco.outputs['Generated'], wmp.inputs['Vector']); WL.new(wmp.outputs['Vector'], env.inputs['Vector'])
+    luzh = WN.new('ShaderNodeBackground'); luzh.inputs['Strength'].default_value = HDRI_FUERZA; WL.new(env.outputs['Color'], luzh.inputs['Color'])
+    lp = WN.new('ShaderNodeLightPath'); mx = WN.new('ShaderNodeMixShader')
+    WL.new(lp.outputs['Is Camera Ray'], mx.inputs['Fac']); WL.new(luzh.outputs[0], mx.inputs[1]); WL.new(WN['Background'].outputs[0], mx.inputs[2])
+    WL.new(mx.outputs[0], WN['World Output'].inputs['Surface'])
 sc.world = w
 r = sc.render
 r.engine = 'CYCLES'; sc.cycles.device = 'CPU'
-sc.cycles.samples = args.muestras; sc.cycles.use_adaptive_sampling = True; sc.cycles.adaptive_threshold = 0.03
-sc.cycles.use_denoising = True; sc.cycles.denoiser = 'OPENIMAGEDENOISE'
-sc.cycles.max_bounces = 3; sc.cycles.caustics_reflective = False; sc.cycles.caustics_refractive = False
-sc.cycles.blur_glossy = 1.0
+sc.cycles.samples = args.muestras; sc.cycles.use_adaptive_sampling = True; sc.cycles.adaptive_threshold = 0.01
+sc.cycles.use_denoising = True; sc.cycles.denoiser = 'OPENIMAGEDENOISE'; sc.cycles.denoising_input_passes = 'RGB_ALBEDO_NORMAL'
+sc.cycles.max_bounces = 8; sc.cycles.caustics_reflective = False; sc.cycles.caustics_refractive = False
+sc.cycles.volume_bounces = 1; sc.cycles.volume_step_rate = 4.0
+sc.cycles.blur_glossy = 0.3
 if args.hilos: r.threads_mode = 'FIXED'; r.threads = args.hilos
 r.use_motion_blur = True; r.motion_blur_shutter = 0.5
 r.resolution_x = args.ancho; r.resolution_y = round(args.ancho * 16 / 9); r.resolution_percentage = 100
 r.image_settings.file_format = 'PNG'
-sc.view_settings.view_transform = 'Standard'; sc.view_settings.look = 'None'
+sc.view_settings.view_transform = 'AgX'; sc.view_settings.look = 'AgX - Punchy'   # color de cine (MEJORAS.md)
+sc.view_settings.exposure = EXPOSICION
 
 if G.TIKTOK:                      # TikTok: fuera cartas y fichas (lo marca como juego); el resto de la escena, igual
     for o in [o for o in bpy.data.objects if o.name.startswith(('carta_', 'ficha'))]: bpy.data.objects.remove(o, do_unlink=True)
@@ -597,16 +708,18 @@ if not G.TIKTOK:
     for f in (1, 30, 60, 85):
         sc.frame_set(f)
         AIRE += [o for o in sc.objects if o.type == 'MESH' and o not in AIRE and not colgado(o)
-                 and not o.name.startswith(('Tulipa', 'Cable', 'Bombilla', 'Lejana', 'Mesa')) and o.matrix_world.translation.z > 0.3]
+                 and not o.name.startswith(('Tulipa', 'Cable', 'Bombilla', 'Lejana', 'Mesa', 'Niebla')) and o.matrix_world.translation.z > 0.3]
 AIRE_ORIG = {o: o.hide_render for o in AIRE}           # (los que no tienen visibilidad animada)
 AIRE_ANIM = {o for o in AIRE if o.animation_data and o.animation_data.action and any(fc.data_path == 'hide_render' for fc in curvas(o))}
 tiempos = {}
 LISTA = [int(x) for x in args.lista.split(',')] if args.lista else range(args.desde, args.hasta + 1, args.cada)
 for f in LISTA:
-    tex_pant.image.filepath = P.ruta(f); tex_pant.image.reload()
-    sc.frame_set(f)
+    fo = G.orig(f)                                      # anuncio: instante de la escena (con decimales) para este fotograma
+    tex_pant.image.filepath = P.ruta(round(fo)); tex_pant.image.reload()
+    sc.frame_set(int(fo), subframe=fo - int(fo))
+    r.motion_blur_shutter = 0.5 * max(0.3, G.orig(f + 1) - fo) if G.ANUNCIO else 0.5   # cámara lenta: menos estela
     for o in AIRE:
-        if f <= 85: o.hide_render = True
+        if fo <= 85: o.hide_render = True
         elif o not in AIRE_ANIM: o.hide_render = AIRE_ORIG[o]
     r.filepath = os.path.join(args.salida, f'f{f:04d}.png')
     t = time.time(); bpy.ops.render.render(write_still=True); tiempos[f] = round(time.time() - t, 2)

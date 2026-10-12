@@ -130,6 +130,7 @@ if __name__ == '__main__':
     args = a.parse_args()
     os.makedirs(OUT, exist_ok=True); recortes()
     alto = round(SALIDA_ANCHO * SH / SW)
-    for f in range(args.desde, args.hasta + 1, args.cada):
+    # (anuncio: cada fotograma usa la pantalla del instante de escena que le toca, G.orig)
+    for f in sorted({round(G.orig(f)) for f in range(args.desde, args.hasta + 1, args.cada)}):
         fotograma(f).resize((SALIDA_ANCHO, alto), Image.LANCZOS).save(ruta(f), quality=90)
     print('pantalla ok', args.desde, args.hasta)

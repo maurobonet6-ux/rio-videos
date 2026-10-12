@@ -110,10 +110,38 @@ def sello():
     for x, y in ((300, 530), (740, 360)): d.ellipse((x - 55, y - 55, x + 55, y + 55), fill=(255, 255, 255))
     im.save(os.path.join(OUT, 'sello.png'))
 
+def captura():
+    """Captura de pantalla de una mano en otra app (genérica): mesa verde, tus cartas A♥ K♥ y el flop Q♥ 8♣ 3♥.
+    Sin nombres de salas, de jugadores ni cifras (ni bote ni fichas). Borde blanco como la miniatura de una captura."""
+    W, H = 720, 1560; im = Image.new('RGB', (W, H), (14, 16, 20)); d = ImageDraw.Draw(im)
+    f = ImageFont.truetype(INTER, 34); d.text((48, 34), '9:41', font=f, fill=(235, 235, 240))
+    for i in range(4): d.rounded_rectangle((W - 150 + i * 16, 54 - i * 6, W - 140 + i * 16, 66), 2, fill=(235, 235, 240))
+    mesa = Image.new('RGB', (W, H), (0, 0, 0)); m = Image.new('L', (W, H), 0)
+    ImageDraw.Draw(m).rounded_rectangle((70, 260, W - 70, 1240), radius=320, fill=255)
+    fel = Image.radial_gradient('L').resize((W, H)).point(lambda p: 255 - p)
+    verde = Image.merge('RGB', [fel.point(lambda p: int(10 + p * 0.06)), fel.point(lambda p: int(60 + p * 0.33)), fel.point(lambda p: int(40 + p * 0.16))])
+    im.paste(verde, (0, 0), m)
+    d.rounded_rectangle((70, 260, W - 70, 1240), radius=320, outline=(70, 52, 34), width=22)
+    for x, y in ((120, 520), (W - 120, 520), (120, 960), (W - 120, 960), (W // 2, 230)):          # rivales: avatar sin nombre
+        d.ellipse((x - 52, y - 52, x + 52, y + 52), fill=(42, 46, 54), outline=(90, 95, 105), width=4)
+        d.ellipse((x - 18, y - 30, x + 18, y + 6), fill=(110, 115, 125)); d.pieslice((x - 36, y + 4, x + 36, y + 70), 180, 360, fill=(110, 115, 125))
+    def pon(c, x, y, ancho):
+        k = Image.open(os.path.join(OUT, f'carta_{c}.png')).convert('RGB').resize((ancho, round(ancho * CH / CW)), Image.LANCZOS)
+        mk = Image.new('L', k.size, 0); ImageDraw.Draw(mk).rounded_rectangle((0, 0, *k.size), radius=ancho // 12, fill=255)
+        im.paste(k, (x - ancho // 2, y), mk)
+    for i, c in enumerate(('Qh', '8c', '3h')): pon(c, W // 2 + (i - 1) * 132, 640, 120)
+    pon('Ah', W // 2 - 84, 1270, 150); pon('Kh', W // 2 + 84, 1270, 150)
+    out = Image.new('RGB', (W + 24, H + 24), (255, 255, 255)); mk = Image.new('L', (W, H), 0)
+    ImageDraw.Draw(mk).rounded_rectangle((0, 0, W, H), radius=46, fill=255); out.paste(im, (12, 12), mk)
+    mo = Image.new('L', out.size, 0); ImageDraw.Draw(mo).rounded_rectangle((0, 0, *out.size), radius=56, fill=255)
+    fondo = Image.new('RGBA', out.size, (0, 0, 0, 0)); fondo.paste(out, (0, 0), mo)
+    fondo.save(os.path.join(OUT, 'captura_mano.png'))
+
 if __name__ == '__main__':
     for c in ('Ah', 'Kh', 'Qh', '8c', '3h', 'Js', 'Td', 'Jh', 'Th', '9h', '7h', 'As'): carta(c)
     sello()
     dorso()
+    captura()
     ficha('roja', (190, 24, 44), (245, 240, 235))
     ficha('negra', (24, 24, 28), (229, 48, 74))
     ficha('blanca', (232, 228, 222), (160, 18, 36))
