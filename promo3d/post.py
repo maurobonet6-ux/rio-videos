@@ -164,15 +164,26 @@ def gancho(lienzo, f):
     k = suave((fin - f) / 5); n = len(G.GANCHO); tam = int(W * 0.112 * (1 + 0.015 * math.sin(f / 4)))
     for j, l in enumerate(G.GANCHO): linea_grande(lienzo, l, H * (0.13 + (j - (n - 1) / 2) * 0.07), tam, k)
 
+def barrido(im, fuerza, sentido):
+    """Desenfoque de movimiento horizontal (como un giro rápido de cámara) con un leve desplazamiento."""
+    a = np.asarray(im).astype(np.float32); n = max(1, int(W * 0.06 * fuerza)); acc = np.zeros_like(a)
+    pasos = range(0, n, max(1, n // 12))
+    for d in pasos: acc += np.roll(a, sentido * d, axis=1)
+    a = np.roll(acc / len(pasos), int(sentido * W * 0.04 * fuerza), axis=1)
+    return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8))
+
 def golpe(im, f):
-    """Golpe de zoom (1,06 → 1) y destello blanco en los cortes y momentos clave."""
+    """Golpe de zoom suave (1,05 → 1) en los momentos clave; en los cortes, barrido de cámara y destello suave."""
     for g in G.GOLPES + G.CORTES:
         t = f - g
-        if 0 <= t < 8:
-            e = 1 + 0.06 * (1 - suave(t / 8)); w2, h2 = int(W * e), int(H * e)
+        if 0 <= t < 9:
+            e = 1 + 0.05 * (1 - suave(t / 9)); w2, h2 = int(W * e), int(H * e)
             im = im.resize((w2, h2), Image.BICUBIC).crop(((w2 - W) // 2, (h2 - H) // 2, (w2 - W) // 2 + W, (h2 - H) // 2 + H))
-        if 0 <= t < 5 and (g in G.CORTES or g == G.GOLPES[0]):
-            im = Image.blend(im, Image.new('RGB', (W, H), (255, 244, 240)), 0.5 * (1 - t / 5))
+    for g in G.CORTES:
+        t = f - g                                                         # -3..-1: sale barriendo; 0..3: entra barriendo
+        if -3 <= t < 0: im = barrido(im, (t + 4) / 4, -1)
+        if 0 <= t < 4: im = barrido(im, 1 - t / 4, 1)
+        if 0 <= t < 4: im = Image.blend(im, Image.new('RGB', (W, H), (255, 244, 240)), 0.28 * (1 - t / 4))
     return im
 
 def progreso(lienzo, f):

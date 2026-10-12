@@ -3,7 +3,7 @@
 # Usa Blender como librería de Python (pip install bpy) y renderiza con Cycles en CPU.
 # Uso: python3.11 promo3d/escena.py --salida DIR [--ancho 720] [--muestras 8] [--desde 1] [--hasta 780] [--cada 1]
 import bpy, bmesh, math, os, sys, time, json, argparse
-from mathutils import Matrix, Vector, Quaternion
+from mathutils import Matrix, Vector, Quaternion, Euler
 
 AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)
 import guion as G
@@ -383,6 +383,19 @@ roja.location = (0, 0, -0.12)
 # Cartas que vuelan: de la mesa, en arco, y entran en la pantalla (se encogen y desaparecen)
 for c, ((x, y), giro, llega, (u, v)) in VUELAN.items():
     o = cartas_vuelan[c]; sale = llega - 16 + (2 if c in ('Kh', '8c') else 0) + (4 if c == '3h' else 0)
+    if G.ANUNCIO:                 # anuncio: la carta vuela más baja y aterriza plana justo en su hueco de la pantalla
+        u, v = G.HUECOS[c]
+        sc.frame_set(llega); R = (pivote.matrix_world.to_3x3().normalized() @ Matrix.Rotation(math.radians(90), 3, 'X'))
+        fin = mundo(llega, punto_pantalla(u, v, 0.006)); antes = mundo(llega - 3, punto_pantalla(u, v, 0.07))
+        medio = Vector((x, y, Z_CARTA)).lerp(fin, 0.6) + Vector((0, -0.12, 0.28))   # arco corto y cerca del móvil (no tapa la cámara)
+        e_mid = Vector((math.radians(INCL - 30), math.radians(20 if x < 0 else -20), math.radians(giro / 2)))
+        e_fin = R.to_euler('XYZ', Euler(e_mid))
+        animar(o, [(sale, (x, y, Z_CARTA)), (sale + 7, medio), (llega - 3, antes), (llega, fin)])
+        animar(o, [(sale, (0, 0, giro)), (sale + 7, [math.degrees(a) for a in e_mid]), (llega - 3, [math.degrees(a) for a in e_fin]),
+                   (llega, [math.degrees(a) for a in e_fin])], ruta='rotation_euler')
+        k = G.ESCALA_HUECO; animar(o, [(sale + 7, (0.5,) * 3), (llega - 3, (k * 1.08,) * 3), (llega, (k,) * 3)], ruta='scale')
+        visible(o, hasta=llega - 1)
+        continue
     fin = mundo(llega, punto_pantalla(u, v, 0.02))
     medio = Vector(((x + fin.x) / 2, (y + fin.y) / 2 - 0.3, 2.2))
     animar(o, [(sale, (x, y, Z_CARTA)), (sale + 8, medio), (llega, fin)])
@@ -633,37 +646,6 @@ if not G.TIKTOK:
             for k in fc.keyframe_points: k.interpolation = 'LINEAR'
     cam.parent = grua; foco.parent = grua_foco
 # Atravesar la pantalla: el último tramo hacia dentro va rápido (corte limpio en CORTE_ANALISIS)
-
-# ---------- anuncio: una captura de pantalla de una mano entra volando y se pega en la pantalla ----------
-if G.ANUNCIO:
-    c0, c1 = G.CAPTURA_VUELA
-    img_c = bpy.data.images.load(os.path.join(TEX, 'captura_mano.png'))
-    CW_ = PW * 0.98; CH_ = CW_ * img_c.size[1] / img_c.size[0]
-    captura = rectangulo_redondeado('Captura', CW_, CH_, 0.05, grosor=0.004, segmentos=8)
-    m_c, t_c = material_imagen('Captura', img_c.filepath, emision=BRILLO_PANT, rugosidad=0.2, coat=0.6)
-    N_, L_ = m_c.node_tree.nodes, m_c.node_tree.links                      # esquinas transparentes (alfa de la imagen)
-    tr = N_.new('ShaderNodeBsdfTransparent'); mz = N_.new('ShaderNodeMixShader'); out_ = N_['Material Output']
-    L_.new(t_c.outputs['Alpha'], mz.inputs['Fac']); L_.new(tr.outputs[0], mz.inputs[1])
-    L_.new(N_['Principled BSDF'].outputs[0], mz.inputs[2]); L_.new(mz.outputs[0], out_.inputs['Surface'])
-    captura.data.materials.append(m_c); captura.rotation_mode = 'QUATERNION'
-    def ante_camara(f, ade, der, aba, giro):
-        sc.frame_set(f); M = cam.matrix_world; X, Y, Z = (M.to_3x3() @ Vector(v) for v in ((1, 0, 0), (0, 1, 0), (0, 0, 1)))
-        R = Matrix((X, -Z, Y)).transposed()                               # la cara (−Y de la malla) mira a la cámara
-        R = R @ Matrix.Rotation(math.radians(giro), 3, 'Y') @ Matrix.Rotation(math.radians(-18), 3, 'X')
-        return M.translation - Z * ade + X * der - Y * aba, R.to_quaternion()
-    def en_pantalla(f):
-        sc.frame_set(f); M = pivote.matrix_world @ Matrix.Translation(punto_pantalla(0.5, 0.5, 0.012))
-        return M.translation.copy(), M.to_quaternion()
-    claves = [(c0, *ante_camara(c0, 1.1, 0.55, 0.75, -24), 0.55), (c0 + 7, *ante_camara(c0 + 7, 1.6, 0.18, 0.1, 10), 0.85),
-              (c1, *en_pantalla(c1), 1.0)]
-    q_ant = None
-    for f, pos, q, esc in claves:
-        if q_ant is not None and q_ant.dot(q) < 0: q.negate()             # el camino corto entre giros
-        q_ant = q
-        captura.location = pos; captura.keyframe_insert('location', frame=f)
-        captura.rotation_quaternion = q; captura.keyframe_insert('rotation_quaternion', frame=f)
-        captura.scale = (esc,) * 3; captura.keyframe_insert('scale', frame=f)
-    visible(captura, desde=c0, hasta=c1)
 
 # ---------- render ----------
 w = bpy.data.worlds.new('Mundo'); w.use_nodes = True

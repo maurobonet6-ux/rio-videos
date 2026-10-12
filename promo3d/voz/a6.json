@@ -1,0 +1,40 @@
+{
+ "texto": "Y juega partidas de práctica contra rivales.",
+ "palabras": [
+  [
+   "Y",
+   0.0,
+   0.16
+  ],
+  [
+   "juega",
+   0.187,
+   0.4
+  ],
+  [
+   "partidas",
+   0.48,
+   0.88
+  ],
+  [
+   "de",
+   0.96,
+   1.04
+  ],
+  [
+   "práctica",
+   1.08,
+   1.52
+  ],
+  [
+   "contra",
+   1.6,
+   1.84
+  ],
+  [
+   "rivales.",
+   1.92,
+   2.8
+  ]
+ ]
+}
