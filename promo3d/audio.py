@@ -24,7 +24,7 @@ voz = np.zeros((N, 2), np.float32)
 for vid, _, f in G.VOZ: poner(voz, leer(os.path.join(AQUI, 'voz', vid + '.mp3')), seg(f))
 voz *= 0.9 / (np.abs(voz).max() + 1e-9)
 
-GAN = {'escaner': 0.4, 'contador': 0.35, 'whoosh': 0.45, 'whoosh2': 0.55, 'fichas': 0.5, 'cartas': 0.45, 'pop': 0.4, 'logro': 0.45, 'golpe': 0.6}
+GAN = {'escaner': 0.4, 'contador': 0.35, 'whoosh': 0.45, 'whoosh2': 0.55, 'fichas': 0.5, 'cartas': 0.45, 'pop': 0.4, 'logro': 0.45, 'golpe': 0.6, 'interruptor': 0.7}
 efectos = np.zeros((N, 2), np.float32)
 cache = {}
 for n, f in G.EFECTOS:

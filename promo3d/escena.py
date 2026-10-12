@@ -177,7 +177,8 @@ def cae(color, x, y, n, f, giro):
     o = ficha(color, x, y, n, giro); z = H_FICHA / 2 + n * H_FICHA
     animar(o, [(f - 9, (x + 0.15, y - 0.4, z + 1.6)), (f, (x, y, z))], interp='LINEAR')
     animar(o, [(f - 9, (35, -20, giro * 57)), (f, (0, 0, giro * 57))], ruta='rotation_euler', interp='LINEAR')
-for i, f in enumerate((30, 34, 38, 43)): cae(['roja', 'negra', 'roja', 'blanca'][i], 1.15, 1.55, 6 + i, f, i * 1.3)
+for i in range(4):                # (antes caían en el gancho; ahora ya están en la pila, en la misma posición final)
+    ficha(['roja', 'negra', 'roja', 'blanca'][i], 1.15, 1.55, 6 + i, math.radians(i * 1.3 * 57))
 for i, (x, y) in enumerate(((0.62, 0.35), (0.6, 0.35), (-0.66, -1.05), (0.64, -1.25))):
     cae(['negra', 'roja', 'blanca', 'roja'][i], x, y, 1 if i == 1 else 0, 420 + i * 3, i)
 
@@ -248,12 +249,12 @@ VUELAN = {   # cartas que entran volando en el móvil: (posición en la mesa, gi
     '3h': ((-1.25, 0.75), 10, G.LLEGA_FLOP, (0.42, 0.43)),
 }
 cartas_vuelan = {c: carta(c, x, y, g) for c, ((x, y), g, _, _) in VUELAN.items()}
-# Gancho: tus dos cartas, boca abajo. El jugador levanta el borde de cada una para mirarla (gira sobre el borde de atrás);
+# Gancho: tus dos cartas, boca abajo, esperando en la mesa vacía (ángulo 0: nadie las mira);
 # se dan la vuelta mientras vuelan al móvil. Va en un vacío padre y en los «delta»: al acabar valen 0 y lo demás no cambia.
 def esquina(c, dx, dy):
     (x, y), giro = VUELAN[c][0], VUELAN[c][1]
     return Vector((x, y, 0)) + Matrix.Rotation(math.radians(giro), 3, 'Z') @ Vector((dx, dy, 0))
-for c, (a0, a1, a2, a3), ang in (('Ah', G.MIRA_AS, 14), ('Kh', G.MIRA_REY, 15)):
+for c, (a0, a1, a2, a3), ang in (('Ah', G.MIRA_AS, 0), ('Kh', G.MIRA_REY, 0)):
     o = cartas_vuelan[c]; (x, y), giro = VUELAN[c][0], VUELAN[c][1]
     eje = Matrix.Rotation(math.radians(giro), 3, 'Z') @ Vector((1, 0, 0))
     p = esquina(c, 0, CARTA_H / 2); p.z = 0                                   # borde de atrás, sobre el fieltro
@@ -409,7 +410,54 @@ dlamp.color = (1.0, 0.8, 0.6); dlamp.shadow_soft_size = 0.25
 lampara = bpy.data.objects.new('Lampara', dlamp); sc.collection.objects.link(lampara); lampara.location = (-0.85, -2.25, 3.0)
 for ob, valores in ((clave.data, ((1, 70), (86, 70), (104, 300))), (contra.data, ((1, 90), (86, 90), (104, 380))),
                     (dlamp, ((1, 650), (86, 650), (104, 0)))):
+    if not G.TIKTOK: valores = {clave.data: ((1, 28), (G.LAMPARA, 28), (G.LAMPARA + 6, 70), (86, 70), (104, 300)),
+                                contra.data: ((1, 38), (G.LAMPARA, 38), (G.LAMPARA + 6, 90), (86, 90), (104, 380)),
+                                dlamp: ((1, 0), (104, 0))}[ob]          # apagada: la del gancho es la colgante
     for fr, e in valores: ob.energy = e; ob.keyframe_insert('energy', frame=fr)
+# Gancho (Instagram): sala en penumbra; una lámpara colgante encima de la mesa se enciende con un parpadeo (clic en G.LAMPARA)
+# y al fondo brillan, desenfocadas, las lámparas de otras mesas. Todo se oculta antes del 86: lo demás no cambia.
+if not G.TIKTOK:
+    LX, LY, LZ = -0.4, -1.45, 2.35                          # borde de abajo de la pantalla de la lámpara
+    dcol = bpy.data.lights.new('Colgante', 'SPOT'); dcol.spot_size = math.radians(100); dcol.spot_blend = 0.6
+    dcol.color = (1.0, 0.8, 0.6); dcol.shadow_soft_size = 0.06
+    colgante = bpy.data.objects.new('Colgante', dcol); sc.collection.objects.link(colgante); colgante.location = (LX, LY, LZ + 0.08)
+    l0 = G.LAMPARA; PARPADEO = ((1, 0), (l0, 1), (l0 + 1, 0.05), (l0 + 3, 0.7), (l0 + 4, 0.15), (l0 + 6, 1))
+    for fr, k in PARPADEO: dcol.energy = 380 * k; dcol.keyframe_insert('energy', frame=fr)
+    bm = bmesh.new()
+    bmesh.ops.create_cone(bm, cap_ends=False, segments=64, radius1=0.42, radius2=0.1, depth=0.34)
+    me = bpy.data.meshes.new('Tulipa'); bm.to_mesh(me); bm.free()
+    for f_ in me.polygons: f_.use_smooth = True
+    tulipa = bpy.data.objects.new('Tulipa', me); sc.collection.objects.link(tulipa); tulipa.location = (LX, LY, LZ + 0.17)
+    sol = tulipa.modifiers.new('g', 'SOLIDIFY'); sol.thickness = 0.012
+    tulipa.data.materials.append(material('Tulipa', base=(0.012, 0.012, 0.014), metal=0.9, rugosidad=0.3))
+    tulipa.data.materials.append(material('Tulipa dentro', base=(0.8, 0.75, 0.68), rugosidad=0.6)); sol.material_offset = 1
+    cable = bpy.data.objects.new('Cable', bpy.data.meshes.new('Cable')); sc.collection.objects.link(cable)
+    bm = bmesh.new(); bmesh.ops.create_cone(bm, cap_ends=True, segments=12, radius1=0.008, radius2=0.008, depth=6.0); bm.to_mesh(cable.data); bm.free()
+    cable.location = (LX, LY, LZ + 0.34 + 3.0); cable.data.materials.append(tulipa.data.materials[0])
+    bm = bmesh.new(); bmesh.ops.create_uvsphere(bm, u_segments=24, v_segments=12, radius=0.07)
+    bombilla = bpy.data.objects.new('Bombilla', bpy.data.meshes.new('Bombilla')); bm.to_mesh(bombilla.data); bm.free()
+    sc.collection.objects.link(bombilla); bombilla.location = (LX, LY, LZ + 0.1)
+    mb = bpy.data.materials.new('Bombilla'); mb.use_nodes = True; nb = mb.node_tree.nodes
+    nb.remove(nb['Principled BSDF']); em = nb.new('ShaderNodeEmission'); em.inputs['Color'].default_value = (1.0, 0.72, 0.42, 1)
+    mb.node_tree.links.new(em.outputs[0], nb['Material Output'].inputs['Surface']); bombilla.data.materials.append(mb)
+    for fr, k in PARPADEO: em.inputs['Strength'].default_value = 40 * k; em.inputs['Strength'].keyframe_insert('default_value', frame=fr)
+    for fc in mb.node_tree.animation_data.action.fcurves if hasattr(mb.node_tree.animation_data.action, 'fcurves') else []:
+        for k in fc.keyframe_points: k.interpolation = 'CONSTANT'
+    for ob in (clave.data, contra.data, dcol):
+        for fc in curvas(ob):
+            for k in fc.keyframe_points:
+                if k.co[0] <= l0 + 6: k.interpolation = 'CONSTANT'
+    fondo = [tulipa, cable, bombilla, colgante]
+    me_b = bpy.data.meshes.new('Lejana'); bm = bmesh.new(); bmesh.ops.create_uvsphere(bm, u_segments=16, v_segments=8, radius=0.22); bm.to_mesh(me_b); bm.free()
+    ml = bpy.data.materials.new('Lejana'); ml.use_nodes = True; nl = ml.node_tree.nodes
+    nl.remove(nl['Principled BSDF']); el = nl.new('ShaderNodeEmission'); el.inputs['Color'].default_value = (1.0, 0.62, 0.32, 1)
+    el.inputs['Strength'].default_value = 5; ml.node_tree.links.new(el.outputs[0], nl['Material Output'].inputs['Surface']); me_b.materials.append(ml)
+    for x, y, z in ((-3.4, 7.5, 2.0), (2.8, 9.5, 3.1), (6.5, 6.5, 2.4), (-7.5, 11.0, 3.4), (0.9, 15.0, 2.2)):
+        o = bpy.data.objects.new('Lejana', me_b); sc.collection.objects.link(o); o.location = (x, y, z); fondo.append(o)
+        dlj = bpy.data.lights.new('LejanaLuz', 'SPOT'); dlj.energy = 120; dlj.spot_size = math.radians(70); dlj.color = (1.0, 0.75, 0.5)
+        lj = bpy.data.objects.new('LejanaLuz', dlj); sc.collection.objects.link(lj); lj.location = (x, y, z - 0.05)
+        fondo.append(lj)
+    for o in fondo: visible(o, hasta=85)
 barra = luz('Barra', (1.8, -2.6, 5.5), 3, 0.3, mira=(0, 0.2, 1.6)); barra.data.shape = 'RECTANGLE'; barra.data.size_y = 5.0
 
 # ---------- cámara: cada clave dice dónde está y a qué mira ----------
@@ -417,7 +465,7 @@ cd = bpy.data.cameras.new('Cam'); cd.lens = 50; cd.sensor_fit = 'VERTICAL'; cd.s
 cam = bpy.data.objects.new('Cam', cd); sc.collection.objects.link(cam); sc.camera = cam
 cam.rotation_mode = 'QUATERNION'
 cd.dof.use_dof = True; cd.dof.aperture_fstop = 2.8
-for fr, fs in ((1, 2.0), (66, 2.0), (90, 2.8), (104, 2.8)):   # gancho en macro: poca profundidad de campo, como una lente de cine
+for fr, fs in (((1, 2.0), (66, 2.0), (90, 2.8), (104, 2.8)) if G.TIKTOK else ((1, 0.25), (36, 0.4), (66, 2.0), (90, 2.8), (104, 2.8))):   # gancho en macro: poca profundidad de campo, como una lente de cine
     cd.dof.aperture_fstop = fs; cd.dof.keyframe_insert('aperture_fstop', frame=fr)
 foco = vacio('Foco'); cd.dof.focus_object = foco
 def mirar(pos, obj, rodar=0.0):
@@ -444,6 +492,12 @@ GANCHO = [(f, _t(c1 + Vector(d), 0.006), tuple(c1 + Vector((0.2, 0.18, 0.2))), 0
           ((1, (0.55, -2.15, 0.36)), (14, (0.52, -2.05, 0.34)), (28, (0.5, -1.98, 0.33)), (36, (0.5, -1.96, 0.33)))]
 GANCHO += [(f, _t(c2 + Vector(d), 0.006), tuple(c2 + Vector((0.2, 0.18, 0.2))), 0) for f, d in ((50, (0.45, -2.0, 0.33)), (60, (0.42, -1.94, 0.32)), (68, (0.41, -1.9, 0.32)))]
 GANCHO += [(82, (0.12, -1.9, 0.8), (0.0, -0.35, 0.06), 0)]
+# Instagram: «la mesa vacía». Plano desde el borde de la mesa hacia la lámpara, que se enciende; la cámara avanza despacio
+# y baja a ras del fieltro, entre las fichas y tus cartas boca abajo, hasta el móvil. Las claves de la cámara siguen siendo
+# las de antes (el suavizado de Blender arrastraría cualquier cambio a los fotogramas de después): este recorrido lo pone
+# un vacío padre, fotograma a fotograma, que en el 82 vale 0 (ver «Grúa» más abajo)
+SALA = [(1, (0.5, -5.6, 1.2), (-0.3, -1.5, 1.75)), (14, (0.47, -5.35, 1.13), (-0.3, -1.5, 1.7)),
+        (36, (0.4, -4.3, 0.78), (-0.2, -1.3, 0.7)), (60, (0.24, -3.1, 0.52), (-0.05, -0.8, 0.14)), GANCHO[-1][:3]]
 if G.TIKTOK:                      # TikTok: sin cartas; primer plano del móvil en la mesa, que se enciende con el análisis
     def _pp(f, u, v): return tuple(mundo(f, punto_pantalla(u, v, 0)))
     gu, gv = uv_caja(*P.caja_pantalla('ganas'))
@@ -451,14 +505,14 @@ if G.TIKTOK:                      # TikTok: sin cartas; primer plano del móvil 
               (44, _t(Vector((0.22, -0.95, 0.42)), 0.006), _pp(44, gu, gv), 0), (62, _t(Vector((0.18, -0.85, 0.46)), 0.006), _pp(62, gu, gv), 0),
               (82, (0.12, -1.9, 0.8), (0.0, -0.35, 0.06), 0)]
 # Teleobjetivo en el gancho (85 mm: menos deformación, como un plano de cine); a partir del 92, el de siempre
-for fr, ln in ((1, 85), (70, 85), (92, 50)): cd.lens = ln; cd.keyframe_insert('lens', frame=fr)
+for fr, ln in (((1, 85), (70, 85), (92, 50)) if G.TIKTOK else ((1, 38), (60, 42), (92, 50))): cd.lens = ln; cd.keyframe_insert('lens', frame=fr)
 # Luz de relleno suave y baja: ilumina la cara de la carta cuando se levanta
 drel = bpy.data.lights.new('Relleno', 'AREA'); drel.size = 0.35; drel.color = (1.0, 0.9, 0.82)
 relleno = bpy.data.objects.new('Relleno', drel); sc.collection.objects.link(relleno)
 for fr, base in ((1, c1), (36, c1), (48, c2), (72, c2)):
     relleno.location = base + Vector((0.15, -0.75, 0.13)); relleno.keyframe_insert('location', frame=fr)
     relleno.rotation_euler = ((base + Vector((0.2, 0.2, 0.08))) - relleno.location).to_track_quat('-Z', 'Y').to_euler(); relleno.keyframe_insert('rotation_euler', frame=fr)
-for fr, e in ((1, 2.5), (72, 2.5), (84, 0)): drel.energy = e; drel.keyframe_insert('energy', frame=fr)
+for fr, e in ((1, 2.5), (72, 2.5), (84, 0)): drel.energy = e if G.TIKTOK else 0; drel.keyframe_insert('energy', frame=fr)
 if G.TIKTOK:
     for fr in (1, 72, 84): drel.energy = 0; drel.keyframe_insert('energy', frame=fr)
     lampara.location = (0.0, -0.35, 3.0)
@@ -486,6 +540,29 @@ for f, pos, obj, rodar in CAM:
 for ob in (cam, foco):
     for fc in curvas(ob):
         for k in fc.keyframe_points: k.interpolation = 'BEZIER'; k.handle_left_type = k.handle_right_type = 'AUTO_CLAMPED'
+# Grúa (Instagram): lleva la cámara (y el foco) del recorrido SALA a la clave original del 82; desde el 82 vale 0
+if not G.TIKTOK:
+    guia, guia_foco = vacio('Guia'), vacio('GuiaFoco'); guia.rotation_mode = 'QUATERNION'; q0 = None
+    for f, pos, obj in SALA:
+        q = mirar(pos, obj)
+        if q0 is not None and q0.dot(q) < 0: q.negate()
+        q0 = q; guia.location = pos; guia.rotation_quaternion = q; guia_foco.location = obj
+        guia.keyframe_insert('location', frame=f); guia.keyframe_insert('rotation_quaternion', frame=f); guia_foco.keyframe_insert('location', frame=f)
+    grua, grua_foco = vacio('Grua'), vacio('GruaFoco'); grua.rotation_mode = 'QUATERNION'
+    fin = SALA[-1][0]; q0 = None; pasos = []
+    for f in range(1, fin):
+        sc.frame_set(f); M = guia.matrix_world @ cam.matrix_world.inverted()
+        q = M.to_quaternion()
+        if q0 is not None and q0.dot(q) < 0: q.negate()
+        q0 = q; pasos.append((f, M.to_translation(), q, guia_foco.matrix_world.translation - foco.matrix_world.translation))
+    pasos.append((fin, Vector(), Quaternion(), Vector()))
+    for f, t, q, tf in pasos:
+        grua.location = t; grua.rotation_quaternion = q; grua_foco.location = tf
+        grua.keyframe_insert('location', frame=f); grua.keyframe_insert('rotation_quaternion', frame=f); grua_foco.keyframe_insert('location', frame=f)
+    for ob in (grua, grua_foco):
+        for fc in curvas(ob):
+            for k in fc.keyframe_points: k.interpolation = 'LINEAR'
+    cam.parent = grua; foco.parent = grua_foco
 # Atravesar la pantalla: el último tramo hacia dentro va rápido (corte limpio en CORTE_ANALISIS)
 
 # ---------- render ----------
@@ -507,11 +584,30 @@ sc.view_settings.view_transform = 'Standard'; sc.view_settings.look = 'None'
 if G.TIKTOK:                      # TikTok: fuera cartas y fichas (lo marca como juego); el resto de la escena, igual
     for o in [o for o in bpy.data.objects if o.name.startswith(('carta_', 'ficha'))]: bpy.data.objects.remove(o, do_unlink=True)
 
+# Gancho (Instagram): la cámara ve la mesa entera, así que se ocultan las cosas que esperan en el aire a escenas de después
+# (fichas y cartas que caen o salen más tarde). Solo en los fotogramas del gancho: lo demás queda igual.
+AIRE = []
+if not G.TIKTOK:
+    def colgado(o):
+        p_ = o
+        while p_ is not None:
+            if p_ == movil: return True
+            p_ = p_.parent
+        return False
+    for f in (1, 30, 60, 85):
+        sc.frame_set(f)
+        AIRE += [o for o in sc.objects if o.type == 'MESH' and o not in AIRE and not colgado(o)
+                 and not o.name.startswith(('Tulipa', 'Cable', 'Bombilla', 'Lejana', 'Mesa')) and o.matrix_world.translation.z > 0.3]
+AIRE_ORIG = {o: o.hide_render for o in AIRE}           # (los que no tienen visibilidad animada)
+AIRE_ANIM = {o for o in AIRE if o.animation_data and o.animation_data.action and any(fc.data_path == 'hide_render' for fc in curvas(o))}
 tiempos = {}
 LISTA = [int(x) for x in args.lista.split(',')] if args.lista else range(args.desde, args.hasta + 1, args.cada)
 for f in LISTA:
     tex_pant.image.filepath = P.ruta(f); tex_pant.image.reload()
     sc.frame_set(f)
+    for o in AIRE:
+        if f <= 85: o.hide_render = True
+        elif o not in AIRE_ANIM: o.hide_render = AIRE_ORIG[o]
     r.filepath = os.path.join(args.salida, f'f{f:04d}.png')
     t = time.time(); bpy.ops.render.render(write_still=True); tiempos[f] = round(time.time() - t, 2)
     print(f'fotograma {f}: {tiempos[f]} s', flush=True)

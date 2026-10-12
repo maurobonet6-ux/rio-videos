@@ -1,60 +1,50 @@
 {
- "texto": "¿Y si pudieras ver lo que hay detrás de cada mano?",
+ "texto": "Los mejores estudian antes de sentarse a la mesa.",
  "palabras": [
   [
-   "¿Y",
+   "Los",
    0.0,
-   0.08
+   0.16
   ],
   [
-   "si",
-   0.16,
-   0.24
+   "mejores",
+   0.24,
+   0.8
   ],
   [
-   "pudieras",
-   0.32,
-   0.72
+   "estudian",
+   0.88,
+   1.44
   ],
   [
-   "ver",
-   0.8,
-   1.04
-  ],
-  [
-   "lo",
-   1.12,
-   1.2
-  ],
-  [
-   "que",
-   1.28,
-   1.36
-  ],
-  [
-   "hay",
-   1.44,
-   1.6
-  ],
-  [
-   "detrás",
-   1.707,
-   2.0
+   "antes",
+   1.52,
+   1.92
   ],
   [
    "de",
+   1.96,
+   2.0
+  ],
+  [
+   "sentarse",
    2.08,
-   2.16
+   2.56
   ],
   [
-   "cada",
-   2.24,
-   2.4
+   "a",
+   2.6,
+   2.64
   ],
   [
-   "mano?",
-   2.48,
-   3.04
+   "la",
+   2.68,
+   2.72
+  ],
+  [
+   "mesa.",
+   2.8,
+   3.36
   ]
  ]
 }

@@ -5,7 +5,7 @@ TOTAL = 720                       # 24 s
 
 # (nombre, primer fotograma, último fotograma)
 ESCENAS = [
-    ('gancho',   1,   108),       # 1. plano macro: el jugador mira sus cartas (A♥, K♥); el móvil se enciende y se levanta
+    ('gancho',   1,   108),       # 1. la mesa vacía: se enciende la lámpara, la cámara avanza a ras del fieltro; el móvil se enciende
     ('analiza',  109, 195),       # 2. el móvil gira: «Analiza tu mano»; las cartas de la mesa entran volando
     ('analisis', 196, 305),       # 3. la cámara atraviesa la pantalla; «Ganas 69%» se despega; salen las cartas que te ayudan
     ('carrera',  306, 392),       # 4. el móvil gira; la etapa 3 se marca y salta un sello verde
@@ -16,7 +16,7 @@ ESCENAS = [
 
 # Voz (ElevenLabs, promo3d/voz.py): id, texto, fotograma en el que empieza
 VOZ = [
-    ('v1', '¿Y si pudieras ver lo que hay detrás de cada mano?', 14),
+    ('v1', 'Los mejores estudian antes de sentarse a la mesa.', 9),
     ('v2', 'Mete tu mano en Río en segundos.', 112),
     ('v3', 'Mira tus probabilidades y las cartas que te ayudan.', 200),
     ('v4', 'Avanza nivel a nivel en tu carrera.', 312),
@@ -26,14 +26,14 @@ VOZ = [
 ]
 # Subtítulos: lo que se lee para cada frase (mismas palabras que la voz, salvo cómo se escribe la marca) y las que van en rojo
 SUBTITULOS = {
-    'v1': '¿Y si pudieras ver lo que hay detrás de cada mano?',
+    'v1': 'Los mejores estudian antes de sentarse a la mesa.',
     'v2': 'Mete tu mano en RÍO en segundos.',
     'v3': 'Mira tus probabilidades y las cartas que te ayudan.',
     'v4': 'Avanza nivel a nivel en tu carrera.',
     'v5': 'Practica contra rivales con su propio estilo.',
     'v6': 'Y descubre tus errores para corregirlos.',
 }
-ROJAS = {'ver', 'mano?', 'RÍO', 'segundos.', 'probabilidades', 'ayudan.', 'nivel', 'carrera.', 'rivales', 'estilo.', 'errores', 'corregirlos.'}
+ROJAS = {'estudian', 'mesa.', 'mano?', 'RÍO', 'segundos.', 'probabilidades', 'ayudan.', 'nivel', 'carrera.', 'rivales', 'estilo.', 'errores', 'corregirlos.'}
 LOGO = 590                        # el logo final empieza a enfocarse
 ESLOGAN = 606                     # «Empieza gratis»
 WEB = 622                         # «riopoker.es»
@@ -41,6 +41,7 @@ WEB = 622                         # «riopoker.es»
 # Pantalla del móvil (pantalla.py)
 MIRA_AS = (6, 16, 32, 42)         # el jugador levanta el borde del A♥ para mirarla (sube, arriba, baja)
 MIRA_REY = (40, 50, 62, 72)       # y luego el del K♥
+LAMPARA = 8                       # clic: la lámpara colgante de la mesa se enciende (con un parpadeo)
 ENCIENDE = 70                     # la pantalla del móvil, apagado sobre la mesa, se enciende con el análisis
 GIRO_INICIO = (96, 118)           # el móvil gira sobre sí mismo: del análisis (gancho) a «Analiza tu mano»
 LLEGA_MANO1 = 150                 # llegan tus dos cartas
@@ -59,7 +60,7 @@ SCROLL_PROGRESO = (540, 570)
 DESLIZA_FINAL = (586, 598)
 
 # Efectos (promo3d/sonidos): (efecto, fotograma)
-EFECTOS = [('fichas', 1), ('cartas', 8), ('cartas', 42), ('pop', 70), ('whoosh', 84), ('whoosh', 96), ('cartas', 134), ('cartas', 154),
+EFECTOS = [('interruptor', 7), ('pop', 70), ('whoosh', 84), ('whoosh', 96), ('cartas', 134), ('cartas', 154),
            ('whoosh2', 188), ('pop', 216), ('cartas', 268), ('whoosh', 296), ('logro', 356), ('whoosh', 384),
            ('fichas', 420), ('cartas', 440), ('whoosh', 482), ('pop', 508), ('whoosh', 578), ('golpe', 590), ('pop', 622)]
 
@@ -75,12 +76,12 @@ if TIKTOK:
                'v5': ('v5t', 'Aprende con guías, tablas y lecciones cortas.'),
                'v7': ('v7t', 'Empieza gratis. Enlace en el perfil.')}
     VOZ = [(_cambia[v][0], _cambia[v][1], f) if v in _cambia else (v, t, f) for v, t, f in VOZ]
-    VOZ = [(v, t, 390 if v == 'v5t' else f) for v, t, f in VOZ]         # «Aprende…» es más larga: empieza antes
+    VOZ = [(v, t, 390 if v == 'v5t' else 14 if v == 'v1t' else f) for v, t, f in VOZ]   # «Aprende…» es más larga: empieza antes
     SUBTITULOS = {_cambia.get(k, (k,))[0]: (_cambia[k][1] if k in _cambia else t) for k, t in SUBTITULOS.items()}
     SUBTITULOS.pop('v7t', None)
     ROJAS = ROJAS | {'calcular', 'probabilidades', 'guías,', 'lecciones'}
     ENCIENDE = 10                                     # el móvil se enciende casi al empezar
-    EFECTOS = [(n, f) for n, f in EFECTOS if n not in ('fichas', 'cartas') and (n, f) != ('pop', 70)] + [('pop', 10)]
+    EFECTOS = [(n, f) for n, f in EFECTOS if n not in ('fichas', 'cartas', 'interruptor') and (n, f) != ('pop', 70)] + [('pop', 10)]
 
 def escena(f):
     for n, a, b in ESCENAS:
