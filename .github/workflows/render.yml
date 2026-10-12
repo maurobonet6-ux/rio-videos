@@ -48,6 +48,7 @@ jobs:
           ENTRADA: ${{ inputs.rango }}
         run: |
           V0="${{ inputs.variante }}"; echo "$MENSAJE" | grep -qi '\[render[^]]*anuncio' && V0=anuncio
+          echo "$MENSAJE" | grep -qi '\[render[^]]*anuncio[^]]*tiktok\|\[render[^]]*tiktok[^]]*anuncio' && V0=anuncio_tiktok
           TOTAL=$(VARIANTE=$V0 python3 -c "import sys; sys.path.insert(0,'promo3d'); import guion; print(guion.TOTAL)")
           R="$ENTRADA"
           [ -n "$R" ] || R=$(echo "$MENSAJE" | grep -oE '\[render[^]]* [0-9]+-[0-9]+' | grep -oE '[0-9]+-[0-9]+' || true)
@@ -55,7 +56,7 @@ jobs:
           echo "rango=$R" >> $GITHUB_OUTPUT
           [ "$R" = "1-$TOTAL" ] && echo "completo=1" >> $GITHUB_OUTPUT || echo "completo=0" >> $GITHUB_OUTPUT
           V="${{ inputs.variante }}"; echo "$MENSAJE" | grep -qi '\[render[^]]*tiktok' && V=tiktok
-          echo "$MENSAJE" | grep -qi '\[render[^]]*anuncio' && V=anuncio
+          echo "$MENSAJE" | grep -qi '\[render[^]]*anuncio' && { [ "$V" = tiktok ] && V=anuncio_tiktok || V=anuncio; }
           echo "variante=$V" >> $GITHUB_OUTPUT
           A="${{ inputs.ancho }}"; M="${{ inputs.muestras }}"      # en el mensaje: «ancho=360», «muestras=16»
           A2=$(echo "$MENSAJE" | grep -oE 'ancho=[0-9]+' | cut -d= -f2 || true); [ -n "$A2" ] && A=$A2

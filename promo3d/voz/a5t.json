@@ -1,0 +1,35 @@
+{
+ "texto": "Pruébalo gratis. Enlace en el perfil.",
+ "palabras": [
+  [
+   "Pruébalo",
+   0.0,
+   0.4
+  ],
+  [
+   "gratis.",
+   0.64,
+   1.12
+  ],
+  [
+   "Enlace",
+   1.2,
+   1.52
+  ],
+  [
+   "en",
+   1.56,
+   1.6
+  ],
+  [
+   "el",
+   1.68,
+   1.76
+  ],
+  [
+   "perfil.",
+   2.0,
+   2.48
+  ]
+ ]
+}

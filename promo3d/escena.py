@@ -472,6 +472,7 @@ contra = luz('Contra', (3.0, 3.2, 4.0), 380, 1.6, (0.85, 0.9, 1.0), mira=(0, 0, 
 dlamp = bpy.data.lights.new('Lampara', 'SPOT'); dlamp.spot_size = math.radians(60); dlamp.spot_blend = 0.8
 dlamp.color = (1.0, 0.8, 0.6); dlamp.shadow_soft_size = 0.25
 lampara = bpy.data.objects.new('Lampara', dlamp); sc.collection.objects.link(lampara); lampara.location = (-0.85, -2.25, 3.0)
+lampara.visible_glossy = False   # su reflejo salía como un disco blanco sobre la pantalla (cristal con coat)
 for ob, valores in ((clave.data, ((1, 70), (86, 70), (104, 300))), (contra.data, ((1, 90), (86, 90), (104, 380))),
                     (dlamp, ((1, 650), (86, 650), (104, 0)))):
     if not G.TIKTOK: valores = {clave.data: ((1, 28), (G.LAMPARA, 28), (G.LAMPARA + 6, 70), (86, 70), (104, 300)),

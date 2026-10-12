@@ -71,7 +71,7 @@ EFECTOS = [('interruptor', 7), ('pop', 70), ('whoosh', 84), ('whoosh', 96), ('ca
 # TikTok quitó vídeos de RÍO por «bienes y servicios regulados» (lo ve como juego): esta versión no lleva mesa, cartas ni fichas,
 # lleva el aviso «EDUCACIÓN», la escena 5 enseña Aprender en vez de la partida y el final no nombra la web.
 import os as _os
-TIKTOK = _os.environ.get('VARIANTE', '') == 'tiktok'
+TIKTOK = _os.environ.get('VARIANTE', '') in ('tiktok', 'anuncio_tiktok')
 if TIKTOK:
     _cambia = {'v1': ('v1t', '¿Sabrías calcular tus probabilidades en cada mano?'),
                'v5': ('v5t', 'Aprende con guías, tablas y lecciones cortas.'),
@@ -88,11 +88,13 @@ if TIKTOK:
 # Usa trozos de la misma escena 3D con otra velocidad: MAPA dice, para fotogramas clave del anuncio, qué instante de la escena se ve.
 # Dentro de cada tramo la velocidad cambia de forma suave (curva monótona por los puntos, sin tirones); entre tramos hay un corte
 # con barrido (post.py). escena.py renderiza con subframes. Todos los tiempos se dan en tiempo de escena y se pasan al anuncio con ad().
-ANUNCIO = _os.environ.get('VARIANTE', '') == 'anuncio'
+ANUNCIO = _os.environ.get('VARIANTE', '') in ('anuncio', 'anuncio_tiktok')   # anuncio_tiktok: el anuncio en versión TikTok
 MAPA = [[(1, 92), (75, 122), (165, 172), (300, 300)],   # gancho a cámara lenta → llegan las cartas → matemáticas
         [(301, 328), (362, 378)],                     # carrera: la etapa se marca
         [(363, 400), (452, 480)],                     # partida de práctica: el móvil se tumba, caen fichas
         [(453, 586), (572, 720)]]                     # final con el logo
+if TIKTOK:                        # TikTok: la frase de Aprender es más larga: ese tramo dura algo más
+    MAPA[2:] = [[(363, 400), (466, 486)], [(467, 586), (586, 720)]]
 # Huecos de las cartas en la pantalla «Analiza tu mano» (u, v medidos en la captura) y su tamaño en la escena
 HUECOS = {'Ah': (0.155, 0.341), 'Kh': (0.29, 0.341), 'Qh': (0.155, 0.464), '8c': (0.282, 0.464), '3h': (0.41, 0.464)}
 ESCALA_HUECO = 0.125
@@ -144,6 +146,12 @@ if ANUNCIO:
     EFECTOS = [('whoosh', 4), ('cartas', ad(134)), ('cartas', ad(152)), ('whoosh2', ad(190)), ('pop', ad(216)), ('cartas', ad(268)),
                ('whoosh', CORTES[0]), ('logro', ad(356)), ('whoosh', CORTES[1]), ('fichas', ad(420)), ('whoosh', CORTES[2]),
                ('golpe', LOGO), ('pop', WEB)]
+    if TIKTOK:                    # TikTok: el tramo de práctica enseña Aprender; sin web ni «póker» en la voz; sin cartas ni fichas
+        VOZ = [('v5t', 'Aprende con guías, tablas y lecciones cortas.', f) if v == 'a6' else
+               ('a5t', 'Pruébalo gratis. Enlace en el perfil.', f) if v == 'a5' else (v, t, f) for v, t, f in VOZ]
+        SUBTITULOS = {('v5t' if k == 'a6' else k): ('Aprende con guías, tablas y lecciones cortas.' if k == 'a6' else t) for k, t in SUBTITULOS.items()}
+        ROJAS = ROJAS | {'guías,', 'lecciones'}
+        EFECTOS = [(n, f) for n, f in EFECTOS if n not in ('fichas', 'cartas')]
 
 def escena(f):
     for n, a, b in ESCENAS:
