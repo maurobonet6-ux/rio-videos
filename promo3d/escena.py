@@ -179,16 +179,64 @@ for i, (x, y) in enumerate(((0.62, 0.35), (0.6, 0.35), (-0.66, -1.05), (0.64, -1
     cae(['negra', 'roja', 'blanca', 'roja'][i], x, y, 1 if i == 1 else 0, 420 + i * 3, i)
 
 # ---------- cartas ----------
-CARTA_W, CARTA_H = 0.66, 0.92
-def carta(c, x=0, y=0, giro=0, boca_arriba=True, tumbada=True, padre=None):
-    """Carta en la mesa (tumbada, cara hacia +Z) o, sin tumbar, mirando a -Y como la pantalla (para hijas del móvil)."""
-    o = rectangulo_redondeado('carta_' + c, CARTA_W, CARTA_H, 0.05)
+CARTA_W, CARTA_H, CARTA_G = 0.66, 0.92, 0.006       # 63 x 88 mm y algo de grosor de cartón
+Z_CARTA = CARTA_G + 0.0005                            # apoyada en el fieltro
+PAPEL_L = (0.95, 0.93, 0.89, 1)
+def material_carta(c, rayos=False, eje=(0, 0, 1)):
+    """Cara, dorso y canto según hacia dónde mira cada cara (normal del objeto). Con rayos=True, el dorso se vuelve
+    transparente por donde ya ha pasado el escáner (valor 'scan' animado: y del mundo) y deja ver la carta."""
+    m = bpy.data.materials.new('Carta_' + c); m.use_nodes = True; N = m.node_tree.nodes; L = m.node_tree.links
+    p = N['Principled BSDF']; p.inputs['Roughness'].default_value = 0.42; p.inputs['Coat Weight'].default_value = 0.25
+    p.inputs['Coat Roughness'].default_value = 0.25
+    tc = N.new('ShaderNodeTexCoord')
+    esp = N.new('ShaderNodeMapping'); esp.inputs['Location'].default_value = (1, 0, 0); esp.inputs['Scale'].default_value = (-1, 1, 1)
+    L.new(tc.outputs['UV'], esp.inputs['Vector'])
+    def img(nombre, espejo=False):
+        t = N.new('ShaderNodeTexImage'); t.image = bpy.data.images.load(os.path.join(TEX, nombre)); t.interpolation = 'Cubic'
+        L.new((esp if espejo else tc).outputs['Vector' if espejo else 'UV'], t.inputs['Vector']); return t.outputs['Color']
+    cara, dorso = img(f'carta_{c}.png'), img('dorso.png', True)
+    dot = N.new('ShaderNodeVectorMath'); dot.operation = 'DOT_PRODUCT'; dot.inputs[1].default_value = eje
+    L.new(tc.outputs['Normal'], dot.inputs[0])
+    def umbral(op, v):
+        n = N.new('ShaderNodeMath'); n.operation = op; n.inputs[1].default_value = v; L.new(dot.outputs['Value'], n.inputs[0]); return n.outputs[0]
+    es_cara, es_dorso = umbral('GREATER_THAN', 0.5), umbral('LESS_THAN', -0.5)
+    def mezcla(fac, a, b):
+        x = N.new('ShaderNodeMix'); x.data_type = 'RGBA'; L.new(fac, x.inputs['Factor'])
+        for k, v in ((6, a), (7, b)):
+            if isinstance(v, tuple): x.inputs[k].default_value = v
+            else: L.new(v, x.inputs[k])
+        return x.outputs[2]
+    if rayos:
+        scan = N.new('ShaderNodeValue'); scan.name = 'scan'; scan.outputs[0].default_value = -9
+        geo = N.new('ShaderNodeNewGeometry'); sep = N.new('ShaderNodeSeparateXYZ'); L.new(geo.outputs['Position'], sep.inputs[0])
+        dif = N.new('ShaderNodeMath'); dif.operation = 'SUBTRACT'; L.new(scan.outputs[0], dif.inputs[0]); L.new(sep.outputs['Y'], dif.inputs[1])
+        rev = N.new('ShaderNodeMapRange'); rev.inputs['From Min'].default_value = 0; rev.inputs['From Max'].default_value = 0.035
+        L.new(dif.outputs[0], rev.inputs['Value'])                                  # 1 donde ya ha pasado el escáner
+        borde = N.new('ShaderNodeMath'); borde.operation = 'ABSOLUTE'; L.new(dif.outputs[0], borde.inputs[0])
+        filo = N.new('ShaderNodeMapRange'); filo.inputs['From Min'].default_value = 0.02; filo.inputs['From Max'].default_value = 0.0
+        L.new(borde.outputs[0], filo.inputs['Value'])                               # 1 justo en la línea del escáner
+        visto = img(f'carta_{c}.png', True)                                         # la cara, vista «a través» del dorso
+        tinte = N.new('ShaderNodeMix'); tinte.data_type = 'RGBA'; tinte.blend_type = 'MULTIPLY'; tinte.inputs['Factor'].default_value = 0.35
+        L.new(visto, tinte.inputs[6]); tinte.inputs[7].default_value = (1.0, 0.55, 0.6, 1)
+        dorso = mezcla(rev.outputs['Result'], dorso, tinte.outputs[2])
+        brillo = N.new('ShaderNodeMath'); brillo.operation = 'MULTIPLY'; L.new(es_dorso, brillo.inputs[0])
+        suma = N.new('ShaderNodeMath'); suma.operation = 'ADD'; L.new(filo.outputs['Result'], suma.inputs[0])
+        luzc = N.new('ShaderNodeMath'); luzc.operation = 'MULTIPLY'; luzc.inputs[1].default_value = 0.35; L.new(rev.outputs['Result'], luzc.inputs[0])
+        L.new(luzc.outputs[0], suma.inputs[1]); L.new(suma.outputs[0], brillo.inputs[1])
+        emi = mezcla(filo.outputs['Result'], tinte.outputs[2], (1.0, 0.12, 0.2, 1))
+        L.new(emi, p.inputs['Emission Color']); L.new(brillo.outputs[0], p.inputs['Emission Strength'])
+    color = mezcla(es_cara, PAPEL_L, cara); color = mezcla(es_dorso, color, dorso)
+    L.new(color, p.inputs['Base Color'])
+    return m
+def carta(c, x=0, y=0, giro=0, boca_arriba=True, tumbada=True, padre=None, rayos=False):
+    """Carta con grosor y cantos redondeados: en la mesa (tumbada, cara hacia +Z) o, sin tumbar, mirando a -Y como la pantalla."""
+    o = rectangulo_redondeado('carta_' + c, CARTA_W, CARTA_H, 0.045, grosor=CARTA_G, segmentos=8)
+    for p_ in o.data.polygons: p_.use_smooth = False
     if tumbada: tumbar(o)
     if not boca_arriba: o.data.transform(Matrix.Rotation(math.pi, 4, 'Y' if tumbada else 'Z'))
-    m, _ = material_imagen('Carta_' + c, os.path.join(TEX, f'carta_{c}.png'), rugosidad=0.3, coat=0.3, dorso=os.path.join(TEX, 'dorso.png'))
-    o.data.materials.append(m)
+    o.data.materials.append(material_carta(c, rayos, (0, 0, 1) if tumbada else (0, -1, 0)))
     if padre: o.parent = padre
-    else: o.location = (x, y, 0.003); o.rotation_euler = (0, 0, math.radians(giro))
+    else: o.location = (x, y, Z_CARTA); o.rotation_euler = (0, 0, math.radians(giro))
     return o
 carta('Js', 1.25, -1.05, 18, False); carta('Td', 1.4, -1.2, -9, False)
 VUELAN = {   # cartas que entran volando en el móvil: (posición en la mesa, giro, fotograma de llegada, punto de la pantalla u, v)
@@ -196,14 +244,15 @@ VUELAN = {   # cartas que entran volando en el móvil: (posición en la mesa, gi
     'Qh': ((-1.35, -0.2), 4, G.LLEGA_FLOP, (0.12, 0.43)), '8c': ((1.4, 0.15), -6, G.LLEGA_FLOP, (0.27, 0.43)),
     '3h': ((-1.25, 0.75), 10, G.LLEGA_FLOP, (0.42, 0.43)),
 }
-cartas_vuelan = {c: carta(c, x, y, g) for c, ((x, y), g, _, _) in VUELAN.items()}
-# Gancho: tus dos cartas llegan boca abajo y se giran. Va en los «delta» (canales aparte): cuando acaban valen 0
-# y el resto de la animación de las cartas queda exactamente igual.
+cartas_vuelan = {c: carta(c, x, y, g, rayos=c in ('Ah', 'Kh')) for c, ((x, y), g, _, _) in VUELAN.items()}
+# Gancho: tus dos cartas están boca abajo; el escáner del móvil las «atraviesa» (rayos X) y luego se giran solas.
 for i, c in enumerate(('Ah', 'Kh')):
-    o = cartas_vuelan[c]; d0 = 1 + i * 4; g0_ = 40 + i * 5
-    animar(o, [(d0, (0.55, 0.95, 0.05)), (d0 + 12, (0, 0, 0)), (g0_, (0, 0, 0)), (g0_ + 6, (0, 0, 0.22)), (g0_ + 12, (0, 0, 0))], ruta='delta_location')
-    for f, r in ((d0, (0, 180, 50)), (d0 + 12, (0, 180, 0)), (g0_, (0, 180, 0)), (g0_ + 12, (0, 0, 0))):
+    o = cartas_vuelan[c]; g0_ = G.GIRO_CARTAS + i * 4
+    for f, r in ((1, (0, 180, 0)), (g0_, (0, 180, 0)), (g0_ + 12, (0, 0, 0))):
         o.delta_rotation_euler = [math.radians(x) for x in r]; o.keyframe_insert('delta_rotation_euler', frame=f)
+    animar(o, [(g0_, (0, 0, 0)), (g0_ + 6, (0, 0, 0.25)), (g0_ + 12, (0, 0, 0))], ruta='delta_location')
+    sn = o.active_material.node_tree.nodes['scan'].outputs[0]
+    for f, v in ((G.ESCANER[0], -2.75), (G.ESCANER[1], -1.55)): sn.default_value = v; sn.keyframe_insert('default_value', frame=f)
 
 # ---------- móvil ----------
 movil = vacio('Movil'); movil.rotation_mode = 'YXZ'      # Y: gira sobre su eje largo · X: inclinación · Z: guiño
@@ -241,9 +290,11 @@ def uv_caja(x, y, w, h):
 INCL = 22
 ARRIBA = (0, 0.2, 1.6)
 MESA = (0, -0.3, GR / 2 + 0.003)
+ESCANEA, ESCANEA2 = (-0.67, -1.5, 0.85), (-0.66, -1.47, 0.88)   # flotando sobre tus cartas, con la pantalla hacia ellas
 g0, g1 = G.GIRO_INICIO; v0, v1 = G.VUELTA_CARRERA
 POSES = [
-    (1, MESA, (0, 0, 0)), (54, MESA, (0, 0, 0)), (88, ARRIBA, (INCL, 0, 2)), (g0, ARRIBA, (INCL, 0, 4)),     # gancho: el móvil espera en la mesa y se levanta
+    (1, (0.4, -0.9, 3.3), (128, 0, -40)), (16, ESCANEA, (128, 0, 0)), (60, ESCANEA2, (126, 0, 3)), (72, ESCANEA2, (122, 0, 3)),
+    (g0, ARRIBA, (INCL, 0, 4)),     # gancho: el móvil entra, escanea las cartas desde arriba y se da la vuelta hacia ti
     (g1, ARRIBA, (INCL, 360, -3)), (150, ARRIBA, (INCL, 360, 6)), (188, ARRIBA, (INCL, 360, 0)),
     (198, ARRIBA, (INCL, 360, 0)), (250, ARRIBA, (INCL, 360, -5)), (292, ARRIBA, (INCL, 360, -2)),
     (v0, ARRIBA, (INCL, 360, -2)), (v1, ARRIBA, (INCL, 720, 4)), (360, ARRIBA, (INCL, 720, 8)), (382, ARRIBA, (INCL, 720, 4)),
@@ -272,7 +323,7 @@ for c, ((x, y), giro, llega, (u, v)) in VUELAN.items():
     o = cartas_vuelan[c]; sale = llega - 16 + (2 if c in ('Kh', '8c') else 0) + (4 if c == '3h' else 0)
     fin = mundo(llega, punto_pantalla(u, v, 0.02))
     medio = Vector(((x + fin.x) / 2, (y + fin.y) / 2 - 0.3, 2.2))
-    animar(o, [(sale, (x, y, 0.003)), (sale + 8, medio), (llega, fin)])
+    animar(o, [(sale, (x, y, Z_CARTA)), (sale + 8, medio), (llega, fin)])
     animar(o, [(sale, (0, 0, giro)), (sale + 8, (INCL - 30, 20 if x < 0 else -20, giro / 2)), (llega, (INCL, 0, 0))], ruta='rotation_euler')
     animar(o, [(sale + 8, (1.1, 1.1, 1.1)), (llega, (0.2, 0.2, 0.2))], ruta='scale')
     visible(o, hasta=llega)
@@ -329,10 +380,57 @@ visible(sello, desde=m0, hasta=386)
 for i, (dx, dy, giro) in enumerate(((-0.6, 0.35, -14), (0.62, 0.0, 12))):
     o = carta('Js', boca_arriba=False); f0 = 432 + i * 4
     ini = mundo(f0, punto_pantalla(0.5, 0.6, 0.03))
-    animar(o, [(f0, (ini.x, ini.y, 0.07)), (f0 + 10, (dx, dy - 0.3, 0.004))])
+    animar(o, [(f0, (ini.x, ini.y, 0.07)), (f0 + 10, (dx, dy - 0.3, Z_CARTA))])
     animar(o, [(f0, (0, 0, 0)), (f0 + 10, (0, 0, giro))], ruta='rotation_euler')
     animar(o, [(f0, (0.3, 0.3, 0.3)), (f0 + 10, (0.8, 0.8, 0.8))], ruta='scale')
     visible(o, desde=f0, hasta=482)
+
+# ---------- gancho: escáner (luz roja que barre la mesa) y contador 3D ----------
+def emisivo(nombre, color, fuerza, alfa=1.0):
+    m = bpy.data.materials.new(nombre); m.use_nodes = True; N = m.node_tree.nodes; L = m.node_tree.links
+    for n in list(N): N.remove(n)
+    e = N.new('ShaderNodeEmission'); e.inputs['Color'].default_value = (*color, 1); e.inputs['Strength'].default_value = fuerza
+    out = N.new('ShaderNodeOutputMaterial')
+    if alfa < 1:
+        t = N.new('ShaderNodeBsdfTransparent'); mx = N.new('ShaderNodeMixShader'); mx.inputs['Fac'].default_value = alfa
+        L.new(t.outputs[0], mx.inputs[1]); L.new(e.outputs[0], mx.inputs[2]); L.new(mx.outputs[0], out.inputs['Surface'])
+    else: L.new(e.outputs[0], out.inputs['Surface'])
+    return m
+e0, e1 = G.ESCANER
+X_ESC = (-1.4, 0.1)                                    # ancho de la línea: cubre las dos cartas
+linea = rectangulo_redondeado('LineaEscaner', X_ESC[1] - X_ESC[0], 0.014, 0.006); tumbar(linea)
+linea.data.materials.append(emisivo('Linea', (1.0, 0.1, 0.16), 14))
+animar(linea, [(e0, ((X_ESC[0] + X_ESC[1]) / 2, -2.75, 0.015)), (e1, ((X_ESC[0] + X_ESC[1]) / 2, -1.55, 0.015))], interp='LINEAR')
+visible(linea, desde=e0 - 2, hasta=e1 + 2)
+dle = bpy.data.lights.new('LuzEscaner', 'AREA'); dle.shape = 'RECTANGLE'; dle.size = 1.5; dle.size_y = 0.08; dle.energy = 6; dle.color = ROJO
+luz_esc = bpy.data.objects.new('LuzEscaner', dle); sc.collection.objects.link(luz_esc); luz_esc.parent = linea; luz_esc.location = (0, 0, 0.12)
+for fr, e in ((1, 0), (e0 - 2, 0), (e0 + 2, 6), (e1 - 2, 6), (e1 + 2, 0)):
+    dle.energy = e; dle.keyframe_insert('energy', frame=fr)
+# El haz: un abanico de luz de la pantalla del móvil a la línea (se recoloca en cada fotograma)
+me = bpy.data.meshes.new('Haz'); me.from_pydata([(0, 0, 0)] * 4, [], [(0, 1, 2, 3)])
+haz = bpy.data.objects.new('Haz', me); sc.collection.objects.link(haz); me.materials.append(emisivo('Haz', (1.0, 0.15, 0.22), 2.5, 0.16))
+visible(haz, desde=e0 - 2, hasta=e1 + 2)
+haz.visible_shadow = False
+def colocar_haz():
+    a = pivote.matrix_world @ punto_pantalla(0.08, 0.55, 0.01); b = pivote.matrix_world @ punto_pantalla(0.92, 0.55, 0.01)
+    y = linea.matrix_world.translation.y
+    for v, co in zip(me.vertices, (a, b, (X_ESC[1], y, 0.016), (X_ESC[0], y, 0.016))): v.co = co
+    me.update()
+# El 69 % que sube encima de las cartas (el «Ganas 69% de las veces» del análisis)
+fuente = bpy.data.fonts.load('/usr/share/fonts/opentype/inter/InterDisplay-Black.otf')
+tc_ = bpy.data.curves.new('Contador', 'FONT'); tc_.body = '0%'; tc_.font = fuente; tc_.align_x = 'CENTER'; tc_.align_y = 'CENTER'
+tc_.size = 0.34; tc_.extrude = 0.018; tc_.bevel_depth = 0.004
+contador = bpy.data.objects.new('Contador', tc_); sc.collection.objects.link(contador)
+contador.data.materials.append(emisivo('Contador', (0.9, 0.035, 0.06), 1.6))
+c0, c1 = G.CONTADOR; n0, n1 = G.VUELA_NUMERO
+destino = mundo(n1, punto_pantalla(0.5, 0.35, 0.02))
+animar(contador, [(c0 - 2, (-0.67, -2.15, 0.12)), (c0 + 6, (-0.67, -2.15, 0.42)), (n0, (-0.67, -2.13, 0.45)), (n1, destino)])
+animar(contador, [(c0 - 2, (45, 0, 0)), (n0, (45, 0, 0)), (n1, (INCL, 0, 0))], ruta='rotation_euler')
+animar(contador, [(c0 - 2, (0.2, 0.2, 0.2)), (c0 + 6, (1.15, 1.15, 1.15)), (c0 + 10, (1, 1, 1)), (n0, (1, 1, 1)), (n1, (0.15, 0.15, 0.15))], ruta='scale')
+visible(contador, desde=c0 - 2, hasta=n1)
+def poner_contador(f):
+    k = max(0.0, min(1.0, (f - c0) / (c1 - c0))); k = 1 - (1 - k) ** 3
+    tc_.body = f'{round(69 * k)}%'
 
 # ---------- luces ----------
 def luz(nombre, loc, potencia, tam, color=(1, 1, 1), mira=(0, 0, 0)):
@@ -349,6 +447,8 @@ cd = bpy.data.cameras.new('Cam'); cd.lens = 50; cd.sensor_fit = 'VERTICAL'; cd.s
 cam = bpy.data.objects.new('Cam', cd); sc.collection.objects.link(cam); sc.camera = cam
 cam.rotation_mode = 'QUATERNION'
 cd.dof.use_dof = True; cd.dof.aperture_fstop = 2.8
+for fr, fs in ((1, 5.0), (90, 5.0), (104, 2.8)):           # en el gancho, más profundidad de campo: cartas y número nítidos
+    cd.dof.aperture_fstop = fs; cd.dof.keyframe_insert('aperture_fstop', frame=fr)
 foco = vacio('Foco'); cd.dof.focus_object = foco
 def mirar(pos, obj, rodar=0.0):
     """Rotación de la cámara en pos mirando a obj (con giro 'rodar' en grados alrededor de la mirada)."""
@@ -366,8 +466,8 @@ def frente(f, d, u=0.5, v=0.5, lado=0.0, alto=0.0, sube=0.0, rodar=0.0):
 GANAS_UV = uv_caja(*P.caja_pantalla('ganas'))
 S = 0.3            # cuánto se apunta por encima en los planos generales
 CAM = [
-    (1, (-0.6, -4.55, 2.75), (-0.67, -2.05, 0.0), 0), (56, (-0.66, -4.2, 2.3), (-0.67, -2.1, 0.0), 0),   # gancho: las cartas, de cerca
-    (80, (-0.3, -3.0, 3.0), (0.0, -0.3, 1.1), 0), frente(g0, 2.6, sube=S), frente(g1, 2.9, lado=-0.3, sube=S),
+    (1, (-0.62, -5.1, 3.35), (-0.67, -1.75, 0.3), 0), (56, (-0.64, -4.75, 2.95), (-0.67, -1.95, 0.42), 0),   # gancho: las cartas y el móvil encima
+    (74, (-0.5, -3.9, 2.55), (-0.55, -1.75, 0.45), 0), frente(g0, 2.6, sube=S), frente(g1, 2.9, lado=-0.3, sube=S),
     frente(132, 2.9, lado=-1.2, alto=-0.5, sube=0.2, rodar=-4), frente(170, 2.7, lado=-0.5, alto=-0.2, sube=0.25),
     frente(188, 2.8, sube=0.15), frente(197, 0.95), frente(198, 0.9),
     frente(214, 1.55, *GANAS_UV, sube=0.05), frente(240, 1.9, *GANAS_UV, lado=0.15, sube=-0.05),
@@ -412,7 +512,7 @@ tiempos = {}
 LISTA = [int(x) for x in args.lista.split(',')] if args.lista else range(args.desde, args.hasta + 1, args.cada)
 for f in LISTA:
     tex_pant.image.filepath = P.ruta(f); tex_pant.image.reload()
-    sc.frame_set(f)
+    sc.frame_set(f); poner_contador(f); colocar_haz()
     r.filepath = os.path.join(args.salida, f'f{f:04d}.png')
     t = time.time(); bpy.ops.render.render(write_still=True); tiempos[f] = round(time.time() - t, 2)
     print(f'fotograma {f}: {tiempos[f]} s', flush=True)

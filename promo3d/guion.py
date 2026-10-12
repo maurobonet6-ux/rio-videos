@@ -5,7 +5,7 @@ TOTAL = 720                       # 24 s
 
 # (nombre, primer fotograma, último fotograma)
 ESCENAS = [
-    ('gancho',   1,   108),       # 1. mesa: se reparten dos cartas y se giran (A♥ K♥); la cámara sube al móvil
+    ('gancho',   1,   108),       # 1. el móvil escanea dos cartas boca abajo (rayos X), sube un 69 % y vuela a la pantalla
     ('analiza',  109, 195),       # 2. el móvil gira: «Analiza tu mano»; las cartas de la mesa entran volando
     ('analisis', 196, 305),       # 3. la cámara atraviesa la pantalla; «Ganas 69%» se despega; salen las cartas que te ayudan
     ('carrera',  306, 392),       # 4. el móvil gira; la etapa 3 se marca y salta un sello verde
@@ -16,7 +16,7 @@ ESCENAS = [
 
 # Voz (ElevenLabs, promo3d/voz.py): id, texto, fotograma en el que empieza
 VOZ = [
-    ('v1', 'Esta mano… ¿la jugaste bien?', 26),
+    ('v1', '¿Y si pudieras ver lo que hay detrás de cada mano?', 14),
     ('v2', 'Mete tu mano en Río en segundos.', 112),
     ('v3', 'Mira tus probabilidades y las cartas que te ayudan.', 200),
     ('v4', 'Avanza nivel a nivel en tu carrera.', 312),
@@ -26,19 +26,23 @@ VOZ = [
 ]
 # Subtítulos: lo que se lee para cada frase (mismas palabras que la voz, salvo cómo se escribe la marca) y las que van en rojo
 SUBTITULOS = {
-    'v1': 'Esta mano… ¿la jugaste bien?',
+    'v1': '¿Y si pudieras ver lo que hay detrás de cada mano?',
     'v2': 'Mete tu mano en RÍO en segundos.',
     'v3': 'Mira tus probabilidades y las cartas que te ayudan.',
     'v4': 'Avanza nivel a nivel en tu carrera.',
     'v5': 'Practica contra rivales con su propio estilo.',
     'v6': 'Y descubre tus errores para corregirlos.',
 }
-ROJAS = {'bien?', 'RÍO', 'segundos.', 'probabilidades', 'ayudan.', 'nivel', 'carrera.', 'rivales', 'estilo.', 'errores', 'corregirlos.'}
+ROJAS = {'ver', 'mano?', 'RÍO', 'segundos.', 'probabilidades', 'ayudan.', 'nivel', 'carrera.', 'rivales', 'estilo.', 'errores', 'corregirlos.'}
 LOGO = 590                        # el logo final empieza a enfocarse
 ESLOGAN = 606                     # «Empieza gratis»
 WEB = 622                         # «riopoker.es»
 
 # Pantalla del móvil (pantalla.py)
+ESCANER = (24, 48)                # el móvil barre las cartas boca abajo con su luz (rayos X)
+CONTADOR = (46, 66)               # el 69 % sube encima de las cartas
+VUELA_NUMERO = (72, 94)           # el número vuela a la pantalla del móvil
+GIRO_CARTAS = 76                  # las cartas se giran solas (A♥ K♥)
 GIRO_INICIO = (96, 118)           # el móvil gira sobre sí mismo: del análisis (gancho) a «Analiza tu mano»
 LLEGA_MANO1 = 150                 # llegan tus dos cartas
 LLEGA_FLOP = 168                  # llega el flop
@@ -56,7 +60,7 @@ SCROLL_PROGRESO = (540, 570)
 DESLIZA_FINAL = (586, 598)
 
 # Efectos (promo3d/sonidos): (efecto, fotograma)
-EFECTOS = [('cartas', 3), ('cartas', 7), ('cartas', 40), ('cartas', 45), ('fichas', 62), ('whoosh', 96), ('cartas', 134), ('cartas', 154),
+EFECTOS = [('fichas', 1), ('whoosh2', 6), ('escaner', 24), ('contador', 46), ('whoosh', 74), ('cartas', 78), ('whoosh', 96), ('cartas', 134), ('cartas', 154),
            ('whoosh2', 188), ('pop', 216), ('cartas', 268), ('whoosh', 296), ('logro', 356), ('whoosh', 384),
            ('fichas', 420), ('cartas', 440), ('whoosh', 482), ('pop', 508), ('whoosh', 578), ('golpe', 590), ('pop', 622)]
 
