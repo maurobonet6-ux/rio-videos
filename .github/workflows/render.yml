@@ -1,0 +1,110 @@
+# Render del vídeo promocional 3D de RÍO. Este repositorio es público para que GitHub Actions sea gratis y sin límite de minutos:
+# aquí solo están los scripts del vídeo, las capturas de la app, la voz y la música (nada del código de la app ni claves).
+# El original está en el repositorio privado (marketing/videos/promo3d); se copia aquí cuando cambia.
+# Se lanza a mano (Actions → Render → Run workflow) o con un push cuyo mensaje lleve «[render]» (todo) o «[render 1-144]» (un tramo).
+name: Render
+
+on:
+  workflow_dispatch:
+    inputs:
+      rango:
+        description: 'Fotogramas (p. ej. 1-144); vacío = todo el vídeo'
+        required: false
+        type: string
+      ancho:
+        description: 'Ancho del render 3D (1080 final; 720 prueba)'
+        default: '1080'
+        type: string
+  push:
+    branches: [main]
+
+env:
+  TROZOS: 20
+  INTER: https://github.com/rsms/inter/releases/download/v4.0/Inter-4.0.zip
+
+jobs:
+  preparar:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[render')
+    runs-on: ubuntu-latest
+    outputs:
+      rango: ${{ steps.rango.outputs.rango }}
+      completo: ${{ steps.rango.outputs.completo }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: rango
+        env:
+          MENSAJE: ${{ github.event.head_commit.message }}
+          ENTRADA: ${{ inputs.rango }}
+        run: |
+          TOTAL=$(python3 -c "import sys; sys.path.insert(0,'promo3d'); import guion; print(guion.TOTAL)")
+          R="$ENTRADA"
+          [ -n "$R" ] || R=$(echo "$MENSAJE" | grep -oE '\[render [0-9]+-[0-9]+\]' | grep -oE '[0-9]+-[0-9]+' || true)
+          [ -n "$R" ] || R="1-$TOTAL"
+          echo "rango=$R" >> $GITHUB_OUTPUT
+          [ "$R" = "1-$TOTAL" ] && echo "completo=1" >> $GITHUB_OUTPUT || echo "completo=0" >> $GITHUB_OUTPUT
+          echo "fotogramas $R"
+
+  # Un tramo de fotogramas por máquina: pantalla del móvil → escena 3D → textos → trozo de vídeo
+  render:
+    needs: preparar
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: true
+      matrix:
+        trozo: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Tramo
+        id: tramo
+        run: |
+          R=${{ needs.preparar.outputs.rango }}; INI=${R%-*}; FIN=${R#*-}
+          N=$(( (FIN - INI + TROZOS) / TROZOS )); DESDE=$(( INI + ${{ matrix.trozo }} * N )); HASTA=$(( DESDE + N - 1 )); [ $HASTA -gt $FIN ] && HASTA=$FIN
+          if [ $DESDE -gt $FIN ]; then echo "vacio=1" >> $GITHUB_OUTPUT; echo "nada que renderizar"; exit 0; fi
+          echo "desde=$DESDE" >> $GITHUB_OUTPUT; echo "hasta=$HASTA" >> $GITHUB_OUTPUT; echo "fotogramas $DESDE-$HASTA"
+      - name: Fuentes y Blender
+        if: steps.tramo.outputs.vacio != '1'
+        run: |
+          curl -sSL "$INTER" -o /tmp/inter.zip && unzip -q -o /tmp/inter.zip -d /tmp/inter
+          sudo mkdir -p /usr/share/fonts/opentype/inter && sudo cp /tmp/inter/extras/otf/*.otf /usr/share/fonts/opentype/inter/
+          sudo apt-get install -y -qq fonts-dejavu-core ffmpeg libxi6 libxxf86vm1 libxfixes3 libxrender1 libgl1 libsm6 > /dev/null
+          pip install -q bpy pillow numpy
+      - name: Render
+        if: steps.tramo.outputs.vacio != '1'
+        run: |
+          D=${{ steps.tramo.outputs.desde }}; H=${{ steps.tramo.outputs.hasta }}
+          python promo3d/texturas.py
+          python promo3d/pantalla.py --desde $D --hasta $H
+          python promo3d/escena.py --salida salida/promo3d/render --ancho ${{ inputs.ancho || '1080' }} --muestras 8 --desde $D --hasta $H | grep '^fotograma'
+          python promo3d/post.py salida/promo3d/render salida/promo3d/post --ancho 1080 --desde $D --hasta $H
+          mkdir -p trozos
+          ffmpeg -y -v error -framerate 30 -start_number $D -i salida/promo3d/post/p%04d.png \
+            -c:v libx264 -crf 12 -preset medium -pix_fmt yuv420p trozos/t$(printf %04d $D).mp4
+      - uses: actions/upload-artifact@v4
+        if: steps.tramo.outputs.vacio != '1'
+        with:
+          name: trozo-${{ matrix.trozo }}
+          path: trozos/*.mp4
+          retention-days: 7
+
+  # Vídeo completo: junta los trozos y pone el sonido (si solo se ha hecho un tramo, los trozos quedan como artefactos)
+  montar:
+    needs: [preparar, render]
+    if: needs.preparar.outputs.completo == '1'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { pattern: trozo-*, merge-multiple: true, path: trozos }
+      - name: Montar
+        run: |
+          sudo apt-get install -y -qq ffmpeg > /dev/null && pip install -q numpy
+          python promo3d/audio.py
+          for t in $(ls trozos/t*.mp4 | sort); do echo "file '$PWD/$t'"; done > lista.txt
+          ffmpeg -y -v error -f concat -safe 0 -i lista.txt -i salida/promo3d/audio.wav -map 0:v -map 1:a \
+            -c:v libx264 -crf 20 -preset slow -maxrate 9M -bufsize 18M -pix_fmt yuv420p -profile:v high -r 30 \
+            -c:a aac -b:a 192k -af loudnorm=I=-14:TP=-1.5:LRA=11 -shortest -movflags +faststart rio-promo3d.mp4
+      - uses: actions/upload-artifact@v4
+        with: { name: rio-promo3d, path: rio-promo3d.mp4, retention-days: 30 }

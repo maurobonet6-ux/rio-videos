@@ -1,0 +1,35 @@
+{
+ "texto": "Y descubre tus errores para corregirlos.",
+ "palabras": [
+  [
+   "Y",
+   0.0,
+   0.08
+  ],
+  [
+   "descubre",
+   0.24,
+   0.64
+  ],
+  [
+   "tus",
+   0.68,
+   0.88
+  ],
+  [
+   "errores",
+   0.96,
+   1.44
+  ],
+  [
+   "para",
+   1.52,
+   1.68
+  ],
+  [
+   "corregirlos.",
+   1.76,
+   2.72
+  ]
+ ]
+}

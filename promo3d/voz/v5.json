@@ -1,0 +1,40 @@
+{
+ "texto": "Practica contra rivales con su propio estilo.",
+ "palabras": [
+  [
+   "Practica",
+   0.0,
+   0.48
+  ],
+  [
+   "contra",
+   0.64,
+   0.8
+  ],
+  [
+   "rivales",
+   0.92,
+   1.36
+  ],
+  [
+   "con",
+   1.48,
+   1.6
+  ],
+  [
+   "su",
+   1.72,
+   1.84
+  ],
+  [
+   "propio",
+   1.96,
+   2.16
+  ],
+  [
+   "estilo.",
+   2.28,
+   2.88
+  ]
+ ]
+}
