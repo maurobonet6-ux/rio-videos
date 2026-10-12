@@ -92,7 +92,10 @@ def fotograma(f):
     sin = [t for t, (_, _, desde) in TARJETAS.items() if f >= desde]
     mitad = lambda ab: sum(ab) // 2
     def desliza(a, b, ab): return deslizar(a, b, (f - ab[0]) / (ab[1] - ab[0]))
-    if f < mitad(G.GIRO_INICIO): return capa('analisis')                 # gancho: el análisis, de golpe
+    if f < G.ENCIENDE: return Image.new('RGB', (SW, SH), (0, 0, 0))          # gancho: el móvil, apagado sobre la mesa
+    if f < mitad(G.GIRO_INICIO):                                            # se enciende con el análisis
+        im = capa('analisis'); k = min(1, (f - G.ENCIENDE) / 8)
+        return im if k >= 1 else Image.eval(im, lambda v: int(v * k))
     if f < G.LLEGA_MANO1: return capa('inicio')
     if f < G.LLEGA_FLOP: return capa('mano1')
     if f < G.CORTE_ANALISIS: return capa('mano')

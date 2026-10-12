@@ -167,7 +167,7 @@ pila(-1.35, 2.25, ['blanca', 'blanca', 'gris', 'negra', 'negra', 'roja', 'roja',
 pila(1.55, -2.45, ['roja', 'roja', 'negra', 'gris'])
 pila(-1.7, -1.05, ['negra', 'blanca', 'roja', 'roja', 'blanca'])
 pila(-0.95, 3.6, ['gris', 'gris', 'negra'])
-for x, y, c in ((0.55, 2.0, 'roja'), (-0.45, -2.75, 'negra'), (1.9, 0.3, 'blanca'), (-2.0, 0.6, 'roja'), (0.95, -3.3, 'gris')):
+for x, y, c in ((0.55, 2.0, 'roja'), (-1.95, -2.95, 'negra'), (1.9, 0.3, 'blanca'), (-2.0, 0.6, 'roja'), (0.95, -3.3, 'gris')):
     ficha(c, x, y, 0, x * 3)
 # Fichas que caen sobre la primera pila en el gancho, y junto al móvil en la partida (suenan en audio.py)
 def cae(color, x, y, n, f, giro):
@@ -244,15 +244,24 @@ VUELAN = {   # cartas que entran volando en el móvil: (posición en la mesa, gi
     'Qh': ((-1.35, -0.2), 4, G.LLEGA_FLOP, (0.12, 0.43)), '8c': ((1.4, 0.15), -6, G.LLEGA_FLOP, (0.27, 0.43)),
     '3h': ((-1.25, 0.75), 10, G.LLEGA_FLOP, (0.42, 0.43)),
 }
-cartas_vuelan = {c: carta(c, x, y, g, rayos=c in ('Ah', 'Kh')) for c, ((x, y), g, _, _) in VUELAN.items()}
-# Gancho: tus dos cartas están boca abajo; el escáner del móvil las «atraviesa» (rayos X) y luego se giran solas.
-for i, c in enumerate(('Ah', 'Kh')):
-    o = cartas_vuelan[c]; g0_ = G.GIRO_CARTAS + i * 4
-    for f, r in ((1, (0, 180, 0)), (g0_, (0, 180, 0)), (g0_ + 12, (0, 0, 0))):
-        o.delta_rotation_euler = [math.radians(x) for x in r]; o.keyframe_insert('delta_rotation_euler', frame=f)
-    animar(o, [(g0_, (0, 0, 0)), (g0_ + 6, (0, 0, 0.25)), (g0_ + 12, (0, 0, 0))], ruta='delta_location')
-    sn = o.active_material.node_tree.nodes['scan'].outputs[0]
-    for f, v in ((G.ESCANER[0], -2.75), (G.ESCANER[1], -1.55)): sn.default_value = v; sn.keyframe_insert('default_value', frame=f)
+cartas_vuelan = {c: carta(c, x, y, g) for c, ((x, y), g, _, _) in VUELAN.items()}
+# Gancho: tus dos cartas, boca abajo. El jugador levanta el borde de cada una para mirarla (gira sobre el borde de atrás);
+# se dan la vuelta mientras vuelan al móvil. Va en un vacío padre y en los «delta»: al acabar valen 0 y lo demás no cambia.
+def esquina(c, dx, dy):
+    (x, y), giro = VUELAN[c][0], VUELAN[c][1]
+    return Vector((x, y, 0)) + Matrix.Rotation(math.radians(giro), 3, 'Z') @ Vector((dx, dy, 0))
+for c, (a0, a1, a2, a3), ang in (('Ah', G.MIRA_AS, 14), ('Kh', G.MIRA_REY, 15)):
+    o = cartas_vuelan[c]; (x, y), giro = VUELAN[c][0], VUELAN[c][1]
+    eje = Matrix.Rotation(math.radians(giro), 3, 'Z') @ Vector((1, 0, 0))
+    p = esquina(c, 0, CARTA_H / 2); p.z = 0                                   # borde de atrás, sobre el fieltro
+    mano = vacio('Mira_' + c); mano.rotation_mode = 'QUATERNION'; o.parent = mano
+    for f, a in ((1, 0), (a0, 0), (a1, ang), (a2, ang), (a3, 0)):
+        R = Matrix.Rotation(math.radians(-a), 3, eje)
+        mano.location = p - R @ p; mano.keyframe_insert('location', frame=f)
+        mano.rotation_quaternion = R.to_quaternion(); mano.keyframe_insert('rotation_quaternion', frame=f)
+    vuela = VUELAN[c][2] - 16 + (2 if c == 'Kh' else 0)
+    for f, r in ((1, (0, 180, 0)), (vuela, (0, 180, 0)), (vuela + 8, (0, 0, 0))):
+        o.delta_rotation_euler = [math.radians(v) for v in r]; o.keyframe_insert('delta_rotation_euler', frame=f)
 
 # ---------- móvil ----------
 movil = vacio('Movil'); movil.rotation_mode = 'YXZ'      # Y: gira sobre su eje largo · X: inclinación · Z: guiño
@@ -290,11 +299,9 @@ def uv_caja(x, y, w, h):
 INCL = 22
 ARRIBA = (0, 0.2, 1.6)
 MESA = (0, -0.3, GR / 2 + 0.003)
-ESCANEA, ESCANEA2 = (-0.67, -1.5, 0.85), (-0.66, -1.47, 0.88)   # flotando sobre tus cartas, con la pantalla hacia ellas
 g0, g1 = G.GIRO_INICIO; v0, v1 = G.VUELTA_CARRERA
 POSES = [
-    (1, (0.4, -0.9, 3.3), (128, 0, -40)), (16, ESCANEA, (128, 0, 0)), (60, ESCANEA2, (126, 0, 3)), (72, ESCANEA2, (122, 0, 3)),
-    (g0, ARRIBA, (INCL, 0, 4)),     # gancho: el móvil entra, escanea las cartas desde arriba y se da la vuelta hacia ti
+    (1, MESA, (0, 0, 0)), (80, MESA, (0, 0, 0)), (g0, ARRIBA, (INCL, 0, 4)),     # gancho: apagado en la mesa; se enciende y se levanta
     (g1, ARRIBA, (INCL, 360, -3)), (150, ARRIBA, (INCL, 360, 6)), (188, ARRIBA, (INCL, 360, 0)),
     (198, ARRIBA, (INCL, 360, 0)), (250, ARRIBA, (INCL, 360, -5)), (292, ARRIBA, (INCL, 360, -2)),
     (v0, ARRIBA, (INCL, 360, -2)), (v1, ARRIBA, (INCL, 720, 4)), (360, ARRIBA, (INCL, 720, 8)), (382, ARRIBA, (INCL, 720, 4)),
@@ -385,61 +392,21 @@ for i, (dx, dy, giro) in enumerate(((-0.6, 0.35, -14), (0.62, 0.0, 12))):
     animar(o, [(f0, (0.3, 0.3, 0.3)), (f0 + 10, (0.8, 0.8, 0.8))], ruta='scale')
     visible(o, desde=f0, hasta=482)
 
-# ---------- gancho: escáner (luz roja que barre la mesa) y contador 3D ----------
-def emisivo(nombre, color, fuerza, alfa=1.0):
-    m = bpy.data.materials.new(nombre); m.use_nodes = True; N = m.node_tree.nodes; L = m.node_tree.links
-    for n in list(N): N.remove(n)
-    e = N.new('ShaderNodeEmission'); e.inputs['Color'].default_value = (*color, 1); e.inputs['Strength'].default_value = fuerza
-    out = N.new('ShaderNodeOutputMaterial')
-    if alfa < 1:
-        t = N.new('ShaderNodeBsdfTransparent'); mx = N.new('ShaderNodeMixShader'); mx.inputs['Fac'].default_value = alfa
-        L.new(t.outputs[0], mx.inputs[1]); L.new(e.outputs[0], mx.inputs[2]); L.new(mx.outputs[0], out.inputs['Surface'])
-    else: L.new(e.outputs[0], out.inputs['Surface'])
-    return m
-e0, e1 = G.ESCANER
-X_ESC = (-1.4, 0.1)                                    # ancho de la línea: cubre las dos cartas
-linea = rectangulo_redondeado('LineaEscaner', X_ESC[1] - X_ESC[0], 0.014, 0.006); tumbar(linea)
-linea.data.materials.append(emisivo('Linea', (1.0, 0.1, 0.16), 14))
-animar(linea, [(e0, ((X_ESC[0] + X_ESC[1]) / 2, -2.75, 0.015)), (e1, ((X_ESC[0] + X_ESC[1]) / 2, -1.55, 0.015))], interp='LINEAR')
-visible(linea, desde=e0 - 2, hasta=e1 + 2)
-dle = bpy.data.lights.new('LuzEscaner', 'AREA'); dle.shape = 'RECTANGLE'; dle.size = 1.5; dle.size_y = 0.08; dle.energy = 6; dle.color = ROJO
-luz_esc = bpy.data.objects.new('LuzEscaner', dle); sc.collection.objects.link(luz_esc); luz_esc.parent = linea; luz_esc.location = (0, 0, 0.12)
-for fr, e in ((1, 0), (e0 - 2, 0), (e0 + 2, 6), (e1 - 2, 6), (e1 + 2, 0)):
-    dle.energy = e; dle.keyframe_insert('energy', frame=fr)
-# El haz: un abanico de luz de la pantalla del móvil a la línea (se recoloca en cada fotograma)
-me = bpy.data.meshes.new('Haz'); me.from_pydata([(0, 0, 0)] * 4, [], [(0, 1, 2, 3)])
-haz = bpy.data.objects.new('Haz', me); sc.collection.objects.link(haz); me.materials.append(emisivo('Haz', (1.0, 0.15, 0.22), 2.5, 0.16))
-visible(haz, desde=e0 - 2, hasta=e1 + 2)
-haz.visible_shadow = False
-def colocar_haz():
-    a = pivote.matrix_world @ punto_pantalla(0.08, 0.55, 0.01); b = pivote.matrix_world @ punto_pantalla(0.92, 0.55, 0.01)
-    y = linea.matrix_world.translation.y
-    for v, co in zip(me.vertices, (a, b, (X_ESC[1], y, 0.016), (X_ESC[0], y, 0.016))): v.co = co
-    me.update()
-# El 69 % que sube encima de las cartas (el «Ganas 69% de las veces» del análisis)
-fuente = bpy.data.fonts.load('/usr/share/fonts/opentype/inter/InterDisplay-Black.otf')
-tc_ = bpy.data.curves.new('Contador', 'FONT'); tc_.body = '0%'; tc_.font = fuente; tc_.align_x = 'CENTER'; tc_.align_y = 'CENTER'
-tc_.size = 0.34; tc_.extrude = 0.018; tc_.bevel_depth = 0.004
-contador = bpy.data.objects.new('Contador', tc_); sc.collection.objects.link(contador)
-contador.data.materials.append(emisivo('Contador', (0.9, 0.035, 0.06), 1.6))
-c0, c1 = G.CONTADOR; n0, n1 = G.VUELA_NUMERO
-destino = mundo(n1, punto_pantalla(0.5, 0.35, 0.02))
-animar(contador, [(c0 - 2, (-0.67, -2.15, 0.12)), (c0 + 6, (-0.67, -2.15, 0.42)), (n0, (-0.67, -2.13, 0.45)), (n1, destino)])
-animar(contador, [(c0 - 2, (45, 0, 0)), (n0, (45, 0, 0)), (n1, (INCL, 0, 0))], ruta='rotation_euler')
-animar(contador, [(c0 - 2, (0.2, 0.2, 0.2)), (c0 + 6, (1.15, 1.15, 1.15)), (c0 + 10, (1, 1, 1)), (n0, (1, 1, 1)), (n1, (0.15, 0.15, 0.15))], ruta='scale')
-visible(contador, desde=c0 - 2, hasta=n1)
-def poner_contador(f):
-    k = max(0.0, min(1.0, (f - c0) / (c1 - c0))); k = 1 - (1 - k) ** 3
-    tc_.body = f'{round(69 * k)}%'
-
 # ---------- luces ----------
 def luz(nombre, loc, potencia, tam, color=(1, 1, 1), mira=(0, 0, 0)):
     d = bpy.data.lights.new(nombre, 'AREA'); d.energy = potencia; d.size = tam; d.color = color
     o = bpy.data.objects.new(nombre, d); o.location = loc; sc.collection.objects.link(o)
     dirv = Vector(mira) - Vector(loc); o.rotation_euler = dirv.to_track_quat('-Z', 'Y').to_euler()
     return o
-luz('Clave', (-4.8, -0.6, 6.0), 300, 3.0, mira=(0, 0, 0.6))
-luz('Contra', (3.0, 3.2, 4.0), 380, 1.6, (0.85, 0.9, 1.0), mira=(0, 0, 1.0))
+clave = luz('Clave', (-4.8, -0.6, 6.0), 300, 3.0, mira=(0, 0, 0.6))
+contra = luz('Contra', (3.0, 3.2, 4.0), 380, 1.6, (0.85, 0.9, 1.0), mira=(0, 0, 1.0))
+# Gancho: luz de sala de póker (una lámpara cálida encima de las cartas, el resto en penumbra); a partir del 104, la de siempre
+dlamp = bpy.data.lights.new('Lampara', 'SPOT'); dlamp.spot_size = math.radians(60); dlamp.spot_blend = 0.8
+dlamp.color = (1.0, 0.8, 0.6); dlamp.shadow_soft_size = 0.25
+lampara = bpy.data.objects.new('Lampara', dlamp); sc.collection.objects.link(lampara); lampara.location = (-0.85, -2.25, 3.0)
+for ob, valores in ((clave.data, ((1, 70), (86, 70), (104, 300))), (contra.data, ((1, 90), (86, 90), (104, 380))),
+                    (dlamp, ((1, 650), (86, 650), (104, 0)))):
+    for fr, e in valores: ob.energy = e; ob.keyframe_insert('energy', frame=fr)
 barra = luz('Barra', (1.8, -2.6, 5.5), 3, 0.3, mira=(0, 0.2, 1.6)); barra.data.shape = 'RECTANGLE'; barra.data.size_y = 5.0
 
 # ---------- cámara: cada clave dice dónde está y a qué mira ----------
@@ -447,7 +414,7 @@ cd = bpy.data.cameras.new('Cam'); cd.lens = 50; cd.sensor_fit = 'VERTICAL'; cd.s
 cam = bpy.data.objects.new('Cam', cd); sc.collection.objects.link(cam); sc.camera = cam
 cam.rotation_mode = 'QUATERNION'
 cd.dof.use_dof = True; cd.dof.aperture_fstop = 2.8
-for fr, fs in ((1, 5.0), (90, 5.0), (104, 2.8)):           # en el gancho, más profundidad de campo: cartas y número nítidos
+for fr, fs in ((1, 2.0), (66, 2.0), (90, 2.8), (104, 2.8)):   # gancho en macro: poca profundidad de campo, como una lente de cine
     cd.dof.aperture_fstop = fs; cd.dof.keyframe_insert('aperture_fstop', frame=fr)
 foco = vacio('Foco'); cd.dof.focus_object = foco
 def mirar(pos, obj, rodar=0.0):
@@ -465,9 +432,26 @@ def frente(f, d, u=0.5, v=0.5, lado=0.0, alto=0.0, sube=0.0, rodar=0.0):
     return f, tuple(pos), tuple(p + a_ * sube), rodar
 GANAS_UV = uv_caja(*P.caja_pantalla('ganas'))
 S = 0.3            # cuánto se apunta por encima en los planos generales
+# Gancho: cámara macro casi a ras del fieltro, a mano (con un leve temblor), primero en la esquina del A♥ y luego en la del K♥;
+# después sube hacia el móvil, que se enciende sobre la mesa
+import random as _r; _r.seed(4)
+def _t(v, k=0.004): return tuple(c + _r.uniform(-k, k) for c in v)
+c1, c2 = esquina('Ah', -CARTA_W / 2, -CARTA_H / 2), esquina('Kh', -CARTA_W / 2, -CARTA_H / 2)
+GANCHO = [(f, _t(c1 + Vector(d), 0.006), tuple(c1 + Vector((0.2, 0.18, 0.2))), 0) for f, d in
+          ((1, (0.55, -2.15, 0.36)), (14, (0.52, -2.05, 0.34)), (28, (0.5, -1.98, 0.33)), (36, (0.5, -1.96, 0.33)))]
+GANCHO += [(f, _t(c2 + Vector(d), 0.006), tuple(c2 + Vector((0.2, 0.18, 0.2))), 0) for f, d in ((50, (0.45, -2.0, 0.33)), (60, (0.42, -1.94, 0.32)), (68, (0.41, -1.9, 0.32)))]
+GANCHO += [(82, (0.12, -1.9, 0.8), (0.0, -0.35, 0.06), 0)]
+# Teleobjetivo en el gancho (85 mm: menos deformación, como un plano de cine); a partir del 92, el de siempre
+for fr, ln in ((1, 85), (70, 85), (92, 50)): cd.lens = ln; cd.keyframe_insert('lens', frame=fr)
+# Luz de relleno suave y baja: ilumina la cara de la carta cuando se levanta
+drel = bpy.data.lights.new('Relleno', 'AREA'); drel.size = 0.35; drel.color = (1.0, 0.9, 0.82)
+relleno = bpy.data.objects.new('Relleno', drel); sc.collection.objects.link(relleno)
+for fr, base in ((1, c1), (36, c1), (48, c2), (72, c2)):
+    relleno.location = base + Vector((0.15, -0.75, 0.13)); relleno.keyframe_insert('location', frame=fr)
+    relleno.rotation_euler = ((base + Vector((0.2, 0.2, 0.08))) - relleno.location).to_track_quat('-Z', 'Y').to_euler(); relleno.keyframe_insert('rotation_euler', frame=fr)
+for fr, e in ((1, 2.5), (72, 2.5), (84, 0)): drel.energy = e; drel.keyframe_insert('energy', frame=fr)
 CAM = [
-    (1, (-0.62, -5.1, 3.35), (-0.67, -1.75, 0.3), 0), (56, (-0.64, -4.75, 2.95), (-0.67, -1.95, 0.42), 0),   # gancho: las cartas y el móvil encima
-    (74, (-0.5, -3.9, 2.55), (-0.55, -1.75, 0.45), 0), frente(g0, 2.6, sube=S), frente(g1, 2.9, lado=-0.3, sube=S),
+    *GANCHO, frente(g0, 2.6, sube=S), frente(g1, 2.9, lado=-0.3, sube=S),
     frente(132, 2.9, lado=-1.2, alto=-0.5, sube=0.2, rodar=-4), frente(170, 2.7, lado=-0.5, alto=-0.2, sube=0.25),
     frente(188, 2.8, sube=0.15), frente(197, 0.95), frente(198, 0.9),
     frente(214, 1.55, *GANAS_UV, sube=0.05), frente(240, 1.9, *GANAS_UV, lado=0.15, sube=-0.05),
@@ -512,7 +496,7 @@ tiempos = {}
 LISTA = [int(x) for x in args.lista.split(',')] if args.lista else range(args.desde, args.hasta + 1, args.cada)
 for f in LISTA:
     tex_pant.image.filepath = P.ruta(f); tex_pant.image.reload()
-    sc.frame_set(f); poner_contador(f); colocar_haz()
+    sc.frame_set(f)
     r.filepath = os.path.join(args.salida, f'f{f:04d}.png')
     t = time.time(); bpy.ops.render.render(write_still=True); tiempos[f] = round(time.time() - t, 2)
     print(f'fotograma {f}: {tiempos[f]} s', flush=True)

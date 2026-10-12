@@ -5,7 +5,7 @@ TOTAL = 720                       # 24 s
 
 # (nombre, primer fotograma, último fotograma)
 ESCENAS = [
-    ('gancho',   1,   108),       # 1. el móvil escanea dos cartas boca abajo (rayos X), sube un 69 % y vuela a la pantalla
+    ('gancho',   1,   108),       # 1. plano macro: el jugador mira sus cartas (A♥, K♥); el móvil se enciende y se levanta
     ('analiza',  109, 195),       # 2. el móvil gira: «Analiza tu mano»; las cartas de la mesa entran volando
     ('analisis', 196, 305),       # 3. la cámara atraviesa la pantalla; «Ganas 69%» se despega; salen las cartas que te ayudan
     ('carrera',  306, 392),       # 4. el móvil gira; la etapa 3 se marca y salta un sello verde
@@ -39,10 +39,9 @@ ESLOGAN = 606                     # «Empieza gratis»
 WEB = 622                         # «riopoker.es»
 
 # Pantalla del móvil (pantalla.py)
-ESCANER = (24, 48)                # el móvil barre las cartas boca abajo con su luz (rayos X)
-CONTADOR = (46, 66)               # el 69 % sube encima de las cartas
-VUELA_NUMERO = (72, 94)           # el número vuela a la pantalla del móvil
-GIRO_CARTAS = 76                  # las cartas se giran solas (A♥ K♥)
+MIRA_AS = (6, 16, 32, 42)         # el jugador levanta el borde del A♥ para mirarla (sube, arriba, baja)
+MIRA_REY = (40, 50, 62, 72)       # y luego el del K♥
+ENCIENDE = 70                     # la pantalla del móvil, apagado sobre la mesa, se enciende con el análisis
 GIRO_INICIO = (96, 118)           # el móvil gira sobre sí mismo: del análisis (gancho) a «Analiza tu mano»
 LLEGA_MANO1 = 150                 # llegan tus dos cartas
 LLEGA_FLOP = 168                  # llega el flop
@@ -60,7 +59,7 @@ SCROLL_PROGRESO = (540, 570)
 DESLIZA_FINAL = (586, 598)
 
 # Efectos (promo3d/sonidos): (efecto, fotograma)
-EFECTOS = [('fichas', 1), ('whoosh2', 6), ('escaner', 24), ('contador', 46), ('whoosh', 74), ('cartas', 78), ('whoosh', 96), ('cartas', 134), ('cartas', 154),
+EFECTOS = [('fichas', 1), ('cartas', 8), ('cartas', 42), ('pop', 70), ('whoosh', 84), ('whoosh', 96), ('cartas', 134), ('cartas', 154),
            ('whoosh2', 188), ('pop', 216), ('cartas', 268), ('whoosh', 296), ('logro', 356), ('whoosh', 384),
            ('fichas', 420), ('cartas', 440), ('whoosh', 482), ('pop', 508), ('whoosh', 578), ('golpe', 590), ('pop', 622)]
 
