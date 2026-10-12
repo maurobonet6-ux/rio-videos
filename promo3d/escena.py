@@ -233,7 +233,7 @@ def carta(c, x=0, y=0, giro=0, boca_arriba=True, tumbada=True, padre=None, rayos
     o = rectangulo_redondeado('carta_' + c, CARTA_W, CARTA_H, 0.045, grosor=CARTA_G, segmentos=8)
     for p_ in o.data.polygons: p_.use_smooth = False
     if tumbada: tumbar(o)
-    if not boca_arriba: o.data.transform(Matrix.Rotation(math.pi, 4, 'Y' if tumbada else 'Z'))
+    if not boca_arriba: o.delta_rotation_euler = (0, math.pi, 0) if tumbada else (0, 0, math.pi)   # boca abajo: se gira el objeto, no la malla (el material mira la normal de la malla)
     o.data.materials.append(material_carta(c, rayos, (0, 0, 1) if tumbada else (0, -1, 0)))
     if padre: o.parent = padre
     else: o.location = (x, y, Z_CARTA); o.rotation_euler = (0, 0, math.radians(giro))
